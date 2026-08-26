@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
+        phone: true,
         businessName: true,
         status: true,
         warningNotice: true,
@@ -27,11 +28,29 @@ export async function GET(req: NextRequest) {
         commissionOverride: true,
         createdAt: true,
         _count: { select: { listings: true, sellerOrders: true } },
+        sellerOrders: {
+          where: { status: 'COMPLETED' },
+          select: { amount: true, platformFee: true, sellerEarnings: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ sellers });
+    const sellersWithMetrics = sellers.map((s) => {
+      const grossVolume = s.sellerOrders.reduce((sum, o) => sum + o.amount, 0);
+      const commissionEarned = s.sellerOrders.reduce((sum, o) => sum + o.platformFee, 0);
+      const totalSellerEarnings = s.sellerOrders.reduce((sum, o) => sum + o.sellerEarnings, 0);
+      const { sellerOrders, ...sellerData } = s;
+      return {
+        ...sellerData,
+        completedSalesCount: sellerOrders.length,
+        grossVolume,
+        commissionEarned,
+        totalSellerEarnings,
+      };
+    });
+
+    return NextResponse.json({ sellers: sellersWithMetrics });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch sellers' }, { status: 500 });
   }

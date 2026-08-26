@@ -11,10 +11,10 @@ export async function GET() {
           include: {
             _count: { select: { listings: true } },
           },
-          orderBy: { name: 'asc' },
+          orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
         },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     });
     return NextResponse.json({ categories });
   } catch (error: any) {

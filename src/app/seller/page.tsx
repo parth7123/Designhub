@@ -101,6 +101,11 @@ export default function SellerDashboardPage() {
       return;
     }
 
+    if (zipFile.size > 200 * 1024 * 1024) {
+      setUploadMsg('ZIP product file size exceeds the 200MB limit (Selected file: ' + (zipFile.size / (1024 * 1024)).toFixed(1) + 'MB). Please select a file under 200MB.');
+      return;
+    }
+
     const filesToUpload = previewFiles.length > 0 ? previewFiles : (previewFile ? [previewFile] : []);
     if (filesToUpload.length < 1 || filesToUpload.length > 4) {
       setUploadMsg('Please select minimum 1 and maximum 4 preview images.');
@@ -730,7 +735,7 @@ export default function SellerDashboardPage() {
                 <div className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 space-y-2">
                   <label className="font-bold text-indigo-700 flex items-center gap-1.5">
                     <Lock className="h-4 w-4 text-emerald-600" />
-                    Product ZIP File (.zip)
+                    Product ZIP File (.zip, .rar, .7z) — Max 200MB
                   </label>
                   <input
                     type="file"
@@ -739,7 +744,7 @@ export default function SellerDashboardPage() {
                     required
                     className="text-slate-600 text-[11px]"
                   />
-                  <p className="text-[10px] text-slate-500">Only accessible to verified buyers after successful purchase.</p>
+                  <p className="text-[10px] text-slate-500">Allowed size: 100MB to 200MB. Accessible to buyers after purchase.</p>
                 </div>
 
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 space-y-2">

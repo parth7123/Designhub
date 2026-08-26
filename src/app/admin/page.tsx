@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Users, AlertTriangle, Layers, Settings, HardDrive, BarChart3, Plus, Tag, Trash2, X } from 'lucide-react';
+import { Shield, Users, AlertTriangle, Layers, Settings, HardDrive, BarChart3, Plus, Tag, Trash2, X, Edit, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
 import { AdPlacement } from '../../components/ads/AdPlacement';
 
 export default function AdminPortalPage() {
@@ -25,11 +25,24 @@ export default function AdminPortalPage() {
   const [warningText, setWarningText] = useState('');
   const [submittingPenalty, setSubmittingPenalty] = useState(false);
 
-  // Category creation form states
+  // Category creation & editing form states
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
   const [selectedParentId, setSelectedParentId] = useState<string>('');
   const [commissionRate, setCommissionRate] = useState('15');
+
+  // Edit category modal states
+  const [editingCategory, setEditingCategory] = useState<any | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatDesc, setEditCatDesc] = useState('');
+  const [editParentId, setEditParentId] = useState<string>('');
+  const [editDisplayOrder, setEditDisplayOrder] = useState<number>(0);
+  const [savingCat, setSavingCat] = useState(false);
+
+  // Seller commission override modal state
+  const [editingSellerCommission, setEditingSellerCommission] = useState<any | null>(null);
+  const [customCommissionVal, setCustomCommissionVal] = useState<string>('');
+  const [savingSellerCommission, setSavingSellerCommission] = useState(false);
 
   const fetchAdminData = async () => {
     try {
@@ -189,6 +202,113 @@ export default function AdminPortalPage() {
         fetchAdminData();
       }
     } catch (e) {}
+  };
+
+  const handleStartEditCategory = (cat: any) => {
+    setEditingCategory(cat);
+    setEditCatName(cat.name || '');
+    setEditCatDesc(cat.description || '');
+    setEditParentId(cat.parentId || '');
+    setEditDisplayOrder(cat.displayOrder || 0);
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory || !editCatName) return;
+
+    setSavingCat(true);
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingCategory.id,
+          name: editCatName,
+          description: editCatDesc,
+          parentId: editParentId || null,
+          displayOrder: Number(editDisplayOrder),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to update category');
+        return;
+      }
+
+      setEditingCategory(null);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message || 'Update failed');
+    } finally {
+      setSavingCat(false);
+    }
+  };
+
+  const handleReorderCategory = async (categoryId: string, direction: 'UP' | 'DOWN', parentId?: string | null) => {
+    const list = parentId
+      ? (categories.find((c) => c.id === parentId)?.children || [])
+      : categories.filter((c) => !c.parentId);
+
+    const index = list.findIndex((c: any) => c.id === categoryId);
+    if (index === -1) return;
+
+    const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+
+    const updatedList = [...list];
+    const temp = updatedList[index];
+    updatedList[index] = updatedList[targetIndex];
+    updatedList[targetIndex] = temp;
+
+    const items = updatedList.map((item: any, idx: number) => ({
+      id: item.id,
+      displayOrder: idx,
+    }));
+
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (e) {
+      console.error('Reorder error:', e);
+    }
+  };
+
+  const handleSaveSellerCommissionOverride = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSellerCommission) return;
+
+    setSavingSellerCommission(true);
+    try {
+      const val = customCommissionVal === '' ? null : parseFloat(customCommissionVal);
+      const res = await fetch(`/api/admin/sellers/${editingSellerCommission.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'APPROVE',
+          commissionOverride: val !== null ? String(val) : '',
+        }),
+      });
+
+      if (res.ok) {
+        setEditingSellerCommission(null);
+        fetchAdminData();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to update seller commission');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error updating seller commission');
+    } finally {
+      setSavingSellerCommission(false);
+    }
   };
 
   const handleSaveCommission = async (e: React.FormEvent) => {
@@ -417,24 +537,30 @@ export default function AdminPortalPage() {
               <thead className="border-b border-slate-100 text-slate-400 uppercase text-[10px] font-bold">
                 <tr>
                   <th className="p-3">Seller / Studio Name</th>
-                  <th className="p-3">Email</th>
+                  <th className="p-3">Contact Email & Phone</th>
                   <th className="p-3">Account Status</th>
-                  <th className="p-3">Active Warning / Notice</th>
-                  <th className="p-3">Penalty Fine (₹)</th>
+                  <th className="p-3">Sales & Gross Rev</th>
+                  <th className="p-3">⚡ Admin Commission Earned</th>
+                  <th className="p-3">Commission % Rate</th>
+                  <th className="p-3">Active Warning</th>
+                  <th className="p-3">Penalty Fine</th>
                   <th className="p-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {sellersList.length === 0 ? (
-                  <tr><td colSpan={6} className="p-6 text-center text-slate-400">No registered sellers found.</td></tr>
+                  <tr><td colSpan={9} className="p-6 text-center text-slate-400">No registered sellers found.</td></tr>
                 ) : (
                   sellersList.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50">
                       <td className="p-3 font-bold text-slate-900">
                         {s.businessName || s.name}
-                        <span className="text-[10px] text-slate-400 font-normal block">{s._count?.listings || 0} listings • {s._count?.sellerOrders || 0} orders</span>
+                        <span className="text-[10px] text-slate-400 font-normal block">{s.name} • {s._count?.listings || 0} listings</span>
                       </td>
-                      <td className="p-3 text-slate-500">{s.email}</td>
+                      <td className="p-3 text-slate-500 font-medium">
+                        {s.email}
+                        {s.phone && <span className="text-[10px] text-slate-400 block">{s.phone}</span>}
+                      </td>
                       <td className="p-3">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                           s.status === 'SUSPENDED'
@@ -445,6 +571,30 @@ export default function AdminPortalPage() {
                         }`}>
                           {s.status === 'SUSPENDED' ? '🚫 Blocked / Suspended' : s.status}
                         </span>
+                      </td>
+                      <td className="p-3 font-medium text-slate-700">
+                        <span className="font-bold text-slate-900 block">{s.completedSalesCount || s._count?.sellerOrders || 0} sales</span>
+                        <span className="text-[10px] text-slate-400">₹{(s.grossVolume || 0).toLocaleString('en-IN')} Vol</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-100 border border-emerald-300 px-3 py-1 text-xs font-black text-emerald-800 shadow-2xs">
+                          <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+                          ₹{(s.commissionEarned || 0).toLocaleString('en-IN')}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSellerCommission(s);
+                            setCustomCommissionVal(s.commissionOverride !== null && s.commissionOverride !== undefined ? String(s.commissionOverride) : '');
+                          }}
+                          className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg transition-colors"
+                          title="Edit Commission Override %"
+                        >
+                          <span>{s.commissionOverride !== null && s.commissionOverride !== undefined ? `${s.commissionOverride}% (Override)` : `${commissionRate}% (Global)`}</span>
+                          <Edit className="h-3 w-3" />
+                        </button>
                       </td>
                       <td className="p-3 max-w-xs truncate text-slate-600">
                         {s.warningNotice ? (
@@ -620,16 +770,48 @@ export default function AdminPortalPage() {
 
           {/* Categories Tree Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {parentCategories.map((cat) => (
+            {parentCategories.map((cat, idx) => (
               <div key={cat.id} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3 shadow-xs flex flex-col justify-between">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <h4 className="font-extrabold text-slate-900 text-sm">{cat.name}</h4>
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleReorderCategory(cat.id, 'UP')}
+                          disabled={idx === 0}
+                          className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-30 rounded hover:bg-slate-100"
+                          title="Move Up"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReorderCategory(cat.id, 'DOWN')}
+                          disabled={idx === parentCategories.length - 1}
+                          className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-30 rounded hover:bg-slate-100"
+                          title="Move Down"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <h4 className="font-extrabold text-slate-900 text-sm truncate">{cat.name}</h4>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
                       <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                        {cat._count?.listings || 0} listings
+                        {cat._count?.listings || 0} assets
                       </span>
                       <button
+                        type="button"
+                        onClick={() => handleStartEditCategory(cat)}
+                        className="rounded-lg p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                        title="Edit Category"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDeleteCategory(cat.id, cat.name)}
                         className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                         title="Delete Category"
@@ -645,17 +827,46 @@ export default function AdminPortalPage() {
                     <div className="pt-2 border-t border-slate-100 space-y-1.5">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Subcategories</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {cat.children.map((sub: any) => (
-                          <span key={sub.id} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 border border-slate-200 pl-2 pr-1 py-1 text-[11px] font-semibold text-slate-700">
-                            <Tag className="h-3 w-3 text-indigo-600" />
+                        {cat.children.map((sub: any, subIdx: number) => (
+                          <span key={sub.id} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                            <Tag className="h-3 w-3 text-indigo-600 shrink-0" />
                             <span>{sub.name}</span>
-                            <button
-                              onClick={() => handleDeleteCategory(sub.id, sub.name)}
-                              className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-100 rounded transition-colors"
-                              title="Delete Subcategory"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            <div className="flex items-center gap-0.5 ml-1 border-l border-slate-300 pl-1">
+                              <button
+                                type="button"
+                                onClick={() => handleReorderCategory(sub.id, 'UP', cat.id)}
+                                disabled={subIdx === 0}
+                                className="p-0.5 text-slate-400 hover:text-indigo-600 disabled:opacity-30"
+                                title="Move Subcategory Left"
+                              >
+                                <ArrowUp className="h-3 w-3 rotate-[-90deg]" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReorderCategory(sub.id, 'DOWN', cat.id)}
+                                disabled={subIdx === cat.children.length - 1}
+                                className="p-0.5 text-slate-400 hover:text-indigo-600 disabled:opacity-30"
+                                title="Move Subcategory Right"
+                              >
+                                <ArrowDown className="h-3 w-3 rotate-[-90deg]" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditCategory(sub)}
+                                className="p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-colors"
+                                title="Edit Subcategory"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategory(sub.id, sub.name)}
+                                className="p-0.5 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                                title="Delete Subcategory"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
                           </span>
                         ))}
                       </div>
@@ -800,6 +1011,154 @@ export default function AdminPortalPage() {
                   }`}
                 >
                   {submittingPenalty ? 'Applying...' : penaltyActionType === 'BLOCK_AND_FINE' ? 'Block & Issue Fine' : 'Send Warning'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Action Modal: Edit Category / Subcategory */}
+      {editingCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Edit className="h-5 w-5 text-indigo-600" />
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Edit Category: {editingCategory.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCategory(null)}
+                className="p-1 text-slate-400 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCategory} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Category Name</label>
+                <input
+                  type="text"
+                  value={editCatName}
+                  onChange={(e) => setEditCatName(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Parent Category (Optional)</label>
+                <select
+                  value={editParentId}
+                  onChange={(e) => setEditParentId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+                >
+                  <option value="">Top-Level Category (No Parent)</option>
+                  {parentCategories.filter((p) => p.id !== editingCategory.id).map((p) => (
+                    <option key={p.id} value={p.id}>Subcategory under: {p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Description</label>
+                <textarea
+                  value={editCatDesc}
+                  onChange={(e) => setEditCatDesc(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Display Order Position Number</label>
+                <input
+                  type="number"
+                  value={editDisplayOrder}
+                  onChange={(e) => setEditDisplayOrder(Number(e.target.value))}
+                  min="0"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Lower position numbers appear first in marketplace navigation.</p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(null)}
+                  className="px-4 py-2 font-bold text-slate-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingCat}
+                  className="rounded-xl bg-indigo-600 px-5 py-2.5 font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-60 transition-all min-h-[44px]"
+                >
+                  {savingCat ? 'Saving...' : 'Save Category Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Action Modal: Edit Seller Commission Override */}
+      {editingSellerCommission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Seller Commission Override: {editingSellerCommission.businessName || editingSellerCommission.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSellerCommission(null)}
+                className="p-1 text-slate-400 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSellerCommissionOverride} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Custom Platform Commission Rate (%)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  value={customCommissionVal}
+                  onChange={(e) => setCustomCommissionVal(e.target.value)}
+                  placeholder={`Leave blank to use Global default (${commissionRate}%)`}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Overrides the global platform commission rate for sales generated by this specific creator.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingSellerCommission(null)}
+                  className="px-4 py-2 font-bold text-slate-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSellerCommission}
+                  className="rounded-xl bg-indigo-600 px-5 py-2.5 font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-60 transition-all min-h-[44px]"
+                >
+                  {savingSellerCommission ? 'Saving...' : 'Update Commission Rate'}
                 </button>
               </div>
             </form>

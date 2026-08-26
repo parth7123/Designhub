@@ -12,10 +12,10 @@ export async function GET() {
           include: {
             _count: { select: { listings: true } },
           },
-          orderBy: { name: 'asc' },
+          orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
         },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     });
     return NextResponse.json({ categories });
   } catch (error: any) {
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Admin authorization required' }, { status: 403 });
     }
 
-    const { name, description, icon, parentId } = await req.json();
+    const { name, description, icon, parentId, displayOrder } = await req.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Category name is required' }, { status: 400 });
@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         description,
         icon: icon || 'Folder',
         parentId: parentId || null,
+        displayOrder: typeof displayOrder === 'number' ? displayOrder : 0,
       },
       include: {
         parent: { select: { id: true, name: true } },
@@ -79,13 +80,44 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Admin authorization required' }, { status: 403 });
     }
 
-    const { id, name, description, icon, parentId } = await req.json();
+    const body = await req.json();
+
+    // 1. Bulk Re-order Support (if items array is provided)
+    if (Array.isArray(body.items)) {
+      const updatePromises = body.items.map((item: { id: string; displayOrder: number }) =>
+        db.category.update({
+          where: { id: item.id },
+          data: { displayOrder: item.displayOrder },
+        })
+      );
+      await Promise.all(updatePromises);
+      return NextResponse.json({ success: true, message: 'Categories re-ordered successfully' });
+    }
+
+    // 2. Single Category / Subcategory Edit
+    const { id, name, description, icon, parentId, displayOrder } = body;
 
     if (!id || !name) {
       return NextResponse.json({ error: 'Category ID and name are required' }, { status: 400 });
     }
 
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const existingCat = await db.category.findUnique({ where: { id } });
+    if (!existingCat) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+    }
+
+    // Update slug only if name changed
+    let slug = existingCat.slug;
+    if (name !== existingCat.name) {
+      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      slug = baseSlug;
+      const slugConflict = await db.category.findFirst({
+        where: { slug, NOT: { id } },
+      });
+      if (slugConflict) {
+        slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+      }
+    }
 
     const updated = await db.category.update({
       where: { id },
@@ -93,8 +125,13 @@ export async function PUT(req: NextRequest) {
         name,
         slug,
         description,
-        icon,
-        parentId: parentId !== undefined ? parentId : undefined,
+        icon: icon || existingCat.icon,
+        parentId: parentId !== undefined ? (parentId || null) : existingCat.parentId,
+        displayOrder: typeof displayOrder === 'number' ? displayOrder : existingCat.displayOrder,
+      },
+      include: {
+        parent: { select: { id: true, name: true } },
+        children: true,
       },
     });
 
@@ -132,7 +169,6 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
 
-    // Check if category or any of its subcategories have active listings
     if (category._count.listings > 0) {
       return NextResponse.json(
         { error: `Cannot delete "${category.name}" because it contains ${category._count.listings} active listing(s). Please reassign or delete listings first.` },
@@ -140,7 +176,6 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Check children listings count
     for (const child of category.children) {
       const childListings = await db.listing.count({ where: { categoryId: child.id } });
       if (childListings > 0) {
@@ -151,7 +186,6 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    // Delete child subcategories first, then delete category
     await db.category.deleteMany({ where: { parentId: id } });
     await db.category.delete({ where: { id } });
 
