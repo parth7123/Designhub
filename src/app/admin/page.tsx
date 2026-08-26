@@ -69,12 +69,12 @@ export default function AdminPortalPage() {
 
       if (disputesRes.status === 'fulfilled' && disputesRes.value.ok) {
         const dData = await disputesRes.value.json();
-        setDisputes(dData.disputes || []);
+        setDisputes(Array.isArray(dData.disputes) ? dData.disputes : []);
       }
 
       if (catRes.status === 'fulfilled' && catRes.value.ok) {
         const cData = await catRes.value.json();
-        setCategories(cData.categories || []);
+        setCategories(Array.isArray(cData.categories) ? cData.categories : []);
       }
 
       if (setRes.status === 'fulfilled' && setRes.value.ok) {
@@ -88,7 +88,7 @@ export default function AdminPortalPage() {
 
       if (sellersRes.status === 'fulfilled' && sellersRes.value.ok) {
         const selData = await sellersRes.value.json();
-        setSellersList(selData.sellers || []);
+        setSellersList(Array.isArray(selData.sellers) ? selData.sellers : []);
       }
     } catch (e) {
       console.error('Admin data fetch error:', e);
@@ -96,6 +96,26 @@ export default function AdminPortalPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data?.user || data?.user?.role !== 'ADMIN') {
+          setIsAuthorized(false);
+          setLoading(false);
+          router.push('/login?redirect=/admin');
+        } else {
+          setIsAuthorized(true);
+          fetchAdminData();
+        }
+      })
+      .catch(() => {
+        setIsAuthorized(false);
+        setLoading(false);
+        router.push('/login?redirect=/admin');
+      });
+  }, []);
 
   const handleApplyPenalty = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,10 +179,6 @@ export default function AdminPortalPage() {
       }
     } catch (e) {}
   };
-
-  useEffect(() => {
-    fetchAdminData();
-  }, []);
 
   const handleSellerApproval = async (sellerId: string, action: 'APPROVE' | 'REJECT', commissionOverride?: string) => {
     try {
@@ -417,10 +433,14 @@ export default function AdminPortalPage() {
     );
   }
 
-  const parentCategories = categories.filter((c) => !c.parentId);
+  const safeSellersList = Array.isArray(sellersList) ? sellersList : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeDisputes = Array.isArray(disputes) ? disputes : [];
+
+  const parentCategories = safeCategories.filter((c) => !c.parentId);
 
   // Filtered & Sorted Sellers List
-  const filteredSellers = sellersList
+  const filteredSellers = safeSellersList
     .filter((s) => {
       const q = sellerSearch.toLowerCase().trim();
       const matchesSearch =
@@ -448,7 +468,7 @@ export default function AdminPortalPage() {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-  const totalAdminCommissionEarned = sellersList.reduce((sum, s) => sum + (s.commissionEarned || 0), 0);
+  const totalAdminCommissionEarned = safeSellersList.reduce((sum, s) => sum + (s.commissionEarned || 0), 0);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8 space-y-8">
@@ -496,7 +516,7 @@ export default function AdminPortalPage() {
             activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Users className="h-4 w-4" /> Users ({sellersList.length})
+          <Users className="h-4 w-4" /> Users ({safeSellersList.length})
         </button>
         <button
           onClick={() => setActiveTab('disputes')}
@@ -530,26 +550,26 @@ export default function AdminPortalPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gross Revenue</span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900">₹{analytics.overview.totalGrossRevenue.toLocaleString('en-IN')}</div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900">₹{(analytics?.overview?.totalGrossRevenue || 0).toLocaleString('en-IN')}</div>
               <span className="text-[10px] text-slate-400 font-medium">Total volume processed</span>
             </div>
 
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-2 shadow-xs">
               <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Admin Net Platform Earnings</span>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-900">₹{analytics.overview.totalPlatformEarnings.toLocaleString('en-IN')}</div>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-900">₹{(analytics?.overview?.totalPlatformEarnings || 0).toLocaleString('en-IN')}</div>
               <span className="text-[10px] text-emerald-700 font-medium">{commissionRate}% Razorpay split commission</span>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sales Count</span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900">{analytics.overview.totalOrdersCount}</div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900">{analytics?.overview?.totalOrdersCount || 0}</div>
               <span className="text-[10px] text-slate-400 font-medium">Completed marketplace orders</span>
             </div>
 
             <div className="rounded-3xl border border-purple-200 bg-purple-50/50 p-5 space-y-2 shadow-xs">
               <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">Seller Network</span>
-              <div className="text-2xl sm:text-3xl font-black text-purple-900">{analytics.overview.totalSellersCount}</div>
-              <span className="text-[10px] text-purple-700 font-medium">{analytics.overview.pendingSellersCount} pending KYC verification</span>
+              <div className="text-2xl sm:text-3xl font-black text-purple-900">{analytics?.overview?.totalSellersCount || 0}</div>
+              <span className="text-[10px] text-purple-700 font-medium">{analytics?.overview?.pendingSellersCount || 0} pending KYC verification</span>
             </div>
           </div>
         </div>
@@ -577,19 +597,19 @@ export default function AdminPortalPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
               <span className="text-slate-400 font-bold block">Total Registered Sellers</span>
-              <span className="text-lg font-black text-slate-900">{sellersList.length}</span>
+              <span className="text-lg font-black text-slate-900">{safeSellersList.length}</span>
             </div>
             <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
               <span className="text-amber-600 font-bold block">Pending KYC Approvals</span>
-              <span className="text-lg font-black text-amber-700">{sellersList.filter(s => s.status === 'PENDING_APPROVAL').length}</span>
+              <span className="text-lg font-black text-amber-700">{safeSellersList.filter(s => s.status === 'PENDING_APPROVAL').length}</span>
             </div>
             <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
               <span className="text-amber-700 font-bold block">Active Policy Warnings</span>
-              <span className="text-lg font-black text-amber-800">{sellersList.filter(s => s.warningNotice).length}</span>
+              <span className="text-lg font-black text-amber-800">{safeSellersList.filter(s => s.warningNotice).length}</span>
             </div>
             <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
               <span className="text-rose-600 font-bold block">Blocked / Suspended</span>
-              <span className="text-lg font-black text-rose-700">{sellersList.filter(s => s.status === 'SUSPENDED').length}</span>
+              <span className="text-lg font-black text-rose-700">{safeSellersList.filter(s => s.status === 'SUSPENDED').length}</span>
             </div>
           </div>
 
@@ -812,10 +832,10 @@ export default function AdminPortalPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {disputes.length === 0 ? (
+                {safeDisputes.length === 0 ? (
                   <tr><td colSpan={6} className="p-6 text-center text-slate-400">No open dispute cases.</td></tr>
                 ) : (
-                  disputes.map((d) => (
+                  safeDisputes.map((d) => (
                     <tr key={d.id} className="hover:bg-slate-50">
                       <td className="p-3 font-bold text-slate-900">{d.listing?.title}</td>
                       <td className="p-3 text-slate-500">{d.buyer?.name}</td>
