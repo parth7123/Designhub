@@ -2,13 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Users, AlertTriangle, Layers, Settings, HardDrive, BarChart3, Plus, Tag, Trash2, X, Edit, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
-import { AdPlacement } from '../../components/ads/AdPlacement';
+import { Shield, Users, AlertTriangle, Layers, Settings, HardDrive, BarChart3, Plus, Tag, Trash2, X, Edit, ArrowUp, ArrowDown, IndianRupee, GripVertical, Search, Filter } from 'lucide-react';
 
 export default function AdminPortalPage() {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<'analytics' | 'sellers' | 'penalties' | 'disputes' | 'categories' | 'settings'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'disputes' | 'categories' | 'settings'>('analytics');
   const [analytics, setAnalytics] = useState<any>(null);
   const [disputes, setDisputes] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -16,6 +15,15 @@ export default function AdminPortalPage() {
   const [driveQuota, setDriveQuota] = useState<any>(null);
   const [sellersList, setSellersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search & Filter states for Users / Sellers tab
+  const [sellerSearch, setSellerSearch] = useState('');
+  const [sellerStatusFilter, setSellerStatusFilter] = useState<string>('ALL');
+  const [sellerSortBy, setSellerSortBy] = useState<'NEWEST' | 'VOLUME' | 'COMMISSION'>('NEWEST');
+
+  // Drag and Drop state for Categories
+  const [draggedCatId, setDraggedCatId] = useState<string | null>(null);
+  const [draggedParentId, setDraggedParentId] = useState<string | null>(null);
 
   // Penalty Modal states
   const [selectedSellerForPenalty, setSelectedSellerForPenalty] = useState<any | null>(null);
@@ -245,6 +253,7 @@ export default function AdminPortalPage() {
     }
   };
 
+  // Reorder via Click (Move Up / Move Down)
   const handleReorderCategory = async (categoryId: string, direction: 'UP' | 'DOWN', parentId?: string | null) => {
     const list = parentId
       ? (categories.find((c) => c.id === parentId)?.children || [])
@@ -278,6 +287,58 @@ export default function AdminPortalPage() {
       }
     } catch (e) {
       console.error('Reorder error:', e);
+    }
+  };
+
+  // Reorder via Drag and Drop
+  const handleDragStart = (e: React.DragEvent, catId: string, parentId?: string | null) => {
+    e.stopPropagation();
+    setDraggedCatId(catId);
+    setDraggedParentId(parentId || null);
+    e.dataTransfer.setData('text/plain', catId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetCatId: string, targetParentId?: string | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedCatId || draggedCatId === targetCatId) return;
+    if ((draggedParentId || null) !== (targetParentId || null)) return;
+
+    const list = targetParentId
+      ? (categories.find((c) => c.id === targetParentId)?.children || [])
+      : categories.filter((c) => !c.parentId);
+
+    const fromIndex = list.findIndex((c: any) => c.id === draggedCatId);
+    const toIndex = list.findIndex((c: any) => c.id === targetCatId);
+
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const updatedList = [...list];
+    const [movedItem] = updatedList.splice(fromIndex, 1);
+    updatedList.splice(toIndex, 0, movedItem);
+
+    const items = updatedList.map((item: any, idx: number) => ({
+      id: item.id,
+      displayOrder: idx,
+    }));
+
+    setDraggedCatId(null);
+    setDraggedParentId(null);
+
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error('Drag reorder failed:', err);
     }
   };
 
@@ -358,6 +419,37 @@ export default function AdminPortalPage() {
 
   const parentCategories = categories.filter((c) => !c.parentId);
 
+  // Filtered & Sorted Sellers List
+  const filteredSellers = sellersList
+    .filter((s) => {
+      const q = sellerSearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        (s.name && s.name.toLowerCase().includes(q)) ||
+        (s.businessName && s.businessName.toLowerCase().includes(q)) ||
+        (s.email && s.email.toLowerCase().includes(q)) ||
+        (s.phone && s.phone.toLowerCase().includes(q));
+
+      let matchesStatus = true;
+      if (sellerStatusFilter === 'APPROVED') matchesStatus = s.status === 'APPROVED';
+      else if (sellerStatusFilter === 'PENDING') matchesStatus = s.status === 'PENDING_APPROVAL';
+      else if (sellerStatusFilter === 'SUSPENDED') matchesStatus = s.status === 'SUSPENDED';
+      else if (sellerStatusFilter === 'WARNING') matchesStatus = Boolean(s.warningNotice);
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sellerSortBy === 'VOLUME') {
+        return (b.grossVolume || 0) - (a.grossVolume || 0);
+      }
+      if (sellerSortBy === 'COMMISSION') {
+        return (b.commissionEarned || 0) - (a.commissionEarned || 0);
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+  const totalAdminCommissionEarned = sellersList.reduce((sum, s) => sum + (s.commissionEarned || 0), 0);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8 space-y-8">
       {/* Admin Title & Navigation Tabs */}
@@ -367,7 +459,7 @@ export default function AdminPortalPage() {
             <Shield className="h-7 w-7 text-purple-600" />
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Admin Governance Portal</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">Platform moderation, subcategories, payout logs & settings</p>
+          <p className="text-xs text-slate-500 mt-1">Platform moderation, users & sellers, subcategories, payout logs & settings</p>
         </div>
 
         {/* Drive Storage Alert Widget */}
@@ -399,20 +491,12 @@ export default function AdminPortalPage() {
           <BarChart3 className="h-4 w-4" /> Analytics & Revenue
         </button>
         <button
-          onClick={() => setActiveTab('sellers')}
+          onClick={() => setActiveTab('users')}
           className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
-            activeTab === 'sellers' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'users' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Users className="h-4 w-4" /> KYC Approvals ({analytics?.overview?.pendingSellersCount || 0})
-        </button>
-        <button
-          onClick={() => setActiveTab('penalties')}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
-            activeTab === 'penalties' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <AlertTriangle className="h-4 w-4 text-amber-400" /> Warnings & Penalties ({sellersList.filter(s => s.status === 'SUSPENDED' || s.warningNotice).length})
+          <Users className="h-4 w-4" /> Users ({sellersList.length})
         </button>
         <button
           onClick={() => setActiveTab('disputes')}
@@ -450,88 +534,116 @@ export default function AdminPortalPage() {
               <span className="text-[10px] text-slate-400 font-medium">Total volume processed</span>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Platform Fee</span>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-600">₹{analytics.overview.totalPlatformCommission.toLocaleString('en-IN')}</div>
-              <span className="text-[10px] text-slate-400 font-medium">Net platform commission</span>
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-2 shadow-xs">
+              <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Admin Net Platform Earnings</span>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-900">₹{analytics.overview.totalPlatformEarnings.toLocaleString('en-IN')}</div>
+              <span className="text-[10px] text-emerald-700 font-medium">{commissionRate}% Razorpay split commission</span>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Seller Payouts</span>
-              <div className="text-2xl sm:text-3xl font-black text-indigo-600">₹{analytics.overview.totalSellerPayouts.toLocaleString('en-IN')}</div>
-              <span className="text-[10px] text-slate-400 font-medium">Razorpay Route transfers</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sales Count</span>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900">{analytics.overview.totalOrdersCount}</div>
+              <span className="text-[10px] text-slate-400 font-medium">Completed marketplace orders</span>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Completed Orders</span>
-              <div className="text-2xl sm:text-3xl font-black text-purple-600">{analytics.overview.totalOrders}</div>
-              <span className="text-[10px] text-slate-400 font-medium">Verified buyer downloads</span>
-            </div>
-          </div>
-
-          <AdPlacement type="banner" slotId="admin_analytics_banner_001" />
-
-          {/* Top Sellers Table */}
-          <div className="space-y-4">
-            <h3 className="text-xl font-extrabold text-slate-900">Top Performing Sellers</h3>
-            <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-xs">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="border-b border-slate-100 text-slate-400 uppercase text-[10px] font-bold">
-                  <tr>
-                    <th className="p-3">Seller Business Name</th>
-                    <th className="p-3">Total Sales</th>
-                    <th className="p-3">Gross Earnings (₹)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {analytics.topSellers.map((s: any) => (
-                    <tr key={s.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-bold text-slate-900">{s.businessName}</td>
-                      <td className="p-3 font-bold text-indigo-600">{s.totalSales}</td>
-                      <td className="p-3 font-extrabold text-emerald-600">₹{s.grossEarnings.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="rounded-3xl border border-purple-200 bg-purple-50/50 p-5 space-y-2 shadow-xs">
+              <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">Seller Network</span>
+              <div className="text-2xl sm:text-3xl font-black text-purple-900">{analytics.overview.totalSellersCount}</div>
+              <span className="text-[10px] text-purple-700 font-medium">{analytics.overview.pendingSellersCount} pending KYC verification</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 2: Seller KYC Approvals */}
-      {activeTab === 'sellers' && (
+      {/* Tab 2: Users & Seller Management Hub */}
+      {activeTab === 'users' && (
         <div className="space-y-6">
-          <h3 className="text-xl font-extrabold text-slate-900">Seller Registration & KYC Queue</h3>
-          <div className="space-y-4">
-            {analytics?.overview?.pendingSellersCount === 0 ? (
-              <p className="text-xs text-slate-500 py-6">No seller accounts currently pending approval.</p>
-            ) : (
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-xs">
-                <p className="text-xs text-slate-600">Review pending seller onboarding KYC applications and configure Razorpay Route parameters.</p>
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => handleSellerApproval('newbie@designhub.store', 'APPROVE')}
-                    className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
-                  >
-                    Approve Pending Seller
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2.5: Seller Warnings & Penalties Enforcement */}
-      {activeTab === 'penalties' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h3 className="text-xl font-extrabold text-slate-900">Seller Governance, Warnings & Fines</h3>
-              <p className="text-xs text-slate-500 mt-1">Issue official policy warnings, suspend creator studios, and mandate penalty fines to unblock accounts</p>
+              <h3 className="text-xl font-extrabold text-slate-900">Users & Seller Management Hub</h3>
+              <p className="text-xs text-slate-500 mt-1">Search, filter, approve KYC onboarding, set custom commission rates, issue warnings, block accounts, and track earnings per seller</p>
+            </div>
+
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 flex items-center gap-3">
+              <IndianRupee className="h-5 w-5 text-emerald-600" />
+              <div>
+                <span className="text-[10px] uppercase font-extrabold text-emerald-700 block">Total Admin Commission Earned</span>
+                <span className="text-lg font-black text-emerald-900">₹{totalAdminCommissionEarned.toLocaleString('en-IN')}</span>
+              </div>
             </div>
           </div>
 
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
+              <span className="text-slate-400 font-bold block">Total Registered Sellers</span>
+              <span className="text-lg font-black text-slate-900">{sellersList.length}</span>
+            </div>
+            <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
+              <span className="text-amber-600 font-bold block">Pending KYC Approvals</span>
+              <span className="text-lg font-black text-amber-700">{sellersList.filter(s => s.status === 'PENDING_APPROVAL').length}</span>
+            </div>
+            <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
+              <span className="text-amber-700 font-bold block">Active Policy Warnings</span>
+              <span className="text-lg font-black text-amber-800">{sellersList.filter(s => s.warningNotice).length}</span>
+            </div>
+            <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-2xs">
+              <span className="text-rose-600 font-bold block">Blocked / Suspended</span>
+              <span className="text-lg font-black text-rose-700">{sellersList.filter(s => s.status === 'SUSPENDED').length}</span>
+            </div>
+          </div>
+
+          {/* Search, Status Filter & Sorting Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-3 rounded-2xl bg-white p-4 border border-slate-200 shadow-2xs">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={sellerSearch}
+                onChange={(e) => setSellerSearch(e.target.value)}
+                placeholder="Search sellers & users by name, studio, email, or phone number..."
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-8 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[40px]"
+              />
+              {sellerSearch && (
+                <button
+                  onClick={() => setSellerSearch('')}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <select
+                  value={sellerStatusFilter}
+                  onChange={(e) => setSellerStatusFilter(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[40px] font-medium"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="APPROVED">Approved Sellers</option>
+                  <option value="PENDING">Pending KYC Approval</option>
+                  <option value="SUSPENDED">Blocked / Suspended</option>
+                  <option value="WARNING">Issued Policy Warning</option>
+                </select>
+              </div>
+
+              <div className="relative">
+                <select
+                  value={sellerSortBy}
+                  onChange={(e: any) => setSellerSortBy(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[40px] font-medium"
+                >
+                  <option value="NEWEST">Newest Registered</option>
+                  <option value="VOLUME">Highest Sales Volume</option>
+                  <option value="COMMISSION">Highest Admin Commission</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Sellers & Users Management Table */}
           <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-xs">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="border-b border-slate-100 text-slate-400 uppercase text-[10px] font-bold">
@@ -542,17 +654,20 @@ export default function AdminPortalPage() {
                   <th className="p-3">Sales & Gross Rev</th>
                   <th className="p-3">⚡ Admin Commission Earned</th>
                   <th className="p-3">Commission % Rate</th>
-                  <th className="p-3">Active Warning</th>
-                  <th className="p-3">Penalty Fine</th>
-                  <th className="p-3">Actions</th>
+                  <th className="p-3">Active Warning / Fine</th>
+                  <th className="p-3">Management Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sellersList.length === 0 ? (
-                  <tr><td colSpan={9} className="p-6 text-center text-slate-400">No registered sellers found.</td></tr>
+                {filteredSellers.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                      No sellers found matching your search or filter criteria.
+                    </td>
+                  </tr>
                 ) : (
-                  sellersList.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50">
+                  filteredSellers.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-bold text-slate-900">
                         {s.businessName || s.name}
                         <span className="text-[10px] text-slate-400 font-normal block">{s.name} • {s._count?.listings || 0} listings</span>
@@ -569,7 +684,7 @@ export default function AdminPortalPage() {
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
-                          {s.status === 'SUSPENDED' ? '🚫 Blocked / Suspended' : s.status}
+                          {s.status === 'SUSPENDED' ? '🚫 Blocked' : s.status}
                         </span>
                       </td>
                       <td className="p-3 font-medium text-slate-700">
@@ -578,7 +693,7 @@ export default function AdminPortalPage() {
                       </td>
                       <td className="p-3">
                         <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-100 border border-emerald-300 px-3 py-1 text-xs font-black text-emerald-800 shadow-2xs">
-                          <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+                          <IndianRupee className="h-3.5 w-3.5 text-emerald-600" />
                           ₹{(s.commissionEarned || 0).toLocaleString('en-IN')}
                         </span>
                       </td>
@@ -601,61 +716,75 @@ export default function AdminPortalPage() {
                           <span className="text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 block truncate">
                             ⚠️ {s.warningNotice}
                           </span>
+                        ) : s.penaltyFineAmount && s.penaltyFineAmount > 0 ? (
+                          <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200 block">
+                            Penalty Fine: ₹{s.penaltyFineAmount.toLocaleString('en-IN')}
+                          </span>
                         ) : (
                           <span className="text-slate-400 italic">None</span>
                         )}
                       </td>
-                      <td className="p-3 font-extrabold">
-                        {s.penaltyFineAmount && s.penaltyFineAmount > 0 ? (
-                          <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
-                            ₹{s.penaltyFineAmount.toLocaleString('en-IN')}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-normal">₹0</span>
-                        )}
-                      </td>
-                      <td className="p-3 flex items-center gap-2">
-                        {s.status === 'SUSPENDED' ? (
-                          <button
-                            onClick={() => handleDirectUnblock(s.id)}
-                            className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 shadow-xs"
-                          >
-                            Unblock Studio
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            {s.warningNotice && (
+                      <td className="p-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {s.status === 'PENDING_APPROVAL' && (
+                            <>
                               <button
-                                onClick={() => handleRevokeWarning(s.id)}
-                                className="rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors"
-                                title="Revoke Warning"
+                                onClick={() => handleSellerApproval(s.id, 'APPROVE')}
+                                className="rounded-xl bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 shadow-2xs"
                               >
-                                Revoke Warning
+                                Approve KYC
                               </button>
-                            )}
+                              <button
+                                onClick={() => handleSellerApproval(s.id, 'REJECT')}
+                                className="rounded-xl bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-300"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+
+                          {s.status === 'SUSPENDED' ? (
                             <button
-                              onClick={() => {
-                                setSelectedSellerForPenalty(s);
-                                setPenaltyActionType('WARN');
-                                setWarningText('Policy Notice: Please ensure all uploaded ZIP assets adhere to DesignHub digital licensing terms.');
-                              }}
-                              className="rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                              onClick={() => handleDirectUnblock(s.id)}
+                              className="rounded-xl bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 shadow-2xs"
                             >
-                              {s.warningNotice ? 'Edit Warning' : 'Issue Warning'}
+                              Unblock Studio
                             </button>
-                            <button
-                              onClick={() => {
-                                setSelectedSellerForPenalty(s);
-                                setPenaltyActionType('BLOCK_AND_FINE');
-                                setPenaltyFineAmount('1000');
-                                setPenaltyReason('Marketplace policy violation: Incompatible files reported by buyers.');
-                              }}
-                              className="rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 transition-colors"
-                            >
-                              Block & Issue Fine
-                            </button>
-                          </div>
-                        )}
+                          ) : (
+                            <>
+                              {s.warningNotice && (
+                                <button
+                                  onClick={() => handleRevokeWarning(s.id)}
+                                  className="rounded-xl border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                                  title="Revoke Warning"
+                                >
+                                  Revoke
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedSellerForPenalty(s);
+                                  setPenaltyActionType('WARN');
+                                  setWarningText('Policy Notice: Please ensure all uploaded ZIP assets adhere to DesignHub digital licensing terms.');
+                                }}
+                                className="rounded-xl border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                              >
+                                {s.warningNotice ? 'Edit Warn' : 'Warn'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedSellerForPenalty(s);
+                                  setPenaltyActionType('BLOCK_AND_FINE');
+                                  setPenaltyFineAmount('1000');
+                                  setPenaltyReason('Marketplace policy violation: Incompatible files reported by buyers.');
+                                }}
+                                className="rounded-xl border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 transition-colors"
+                              >
+                                Block & Fine
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -723,7 +852,12 @@ export default function AdminPortalPage() {
       {/* Tab 4: Categories & Subcategories */}
       {activeTab === 'categories' && (
         <div className="space-y-6">
-          <h3 className="text-xl font-extrabold text-slate-900">Categories & Subcategories Management</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 className="text-xl font-extrabold text-slate-900">Categories & Subcategories Management</h3>
+            <span className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl font-semibold">
+              💡 Tip: Re-order categories by dragging cards or clicking ▲/▼ buttons
+            </span>
+          </div>
           
           <form onSubmit={handleCreateCategory} className="space-y-3 rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
             <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
@@ -768,13 +902,23 @@ export default function AdminPortalPage() {
             </div>
           </form>
 
-          {/* Categories Tree Grid */}
+          {/* Drag and Drop Categories Tree Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {parentCategories.map((cat, idx) => (
-              <div key={cat.id} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3 shadow-xs flex flex-col justify-between">
+              <div
+                key={cat.id}
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, cat.id, null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, cat.id, null)}
+                className={`rounded-2xl border bg-white p-5 space-y-3 shadow-xs flex flex-col justify-between transition-all ${
+                  draggedCatId === cat.id ? 'border-indigo-500 bg-indigo-50/20 scale-[0.99] opacity-60' : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2 gap-2">
                     <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical className="h-4 w-4 text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing shrink-0" title="Drag to reorder" />
                       <div className="flex items-center gap-0.5">
                         <button
                           type="button"
@@ -828,7 +972,17 @@ export default function AdminPortalPage() {
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Subcategories</span>
                       <div className="flex flex-wrap gap-1.5">
                         {cat.children.map((sub: any, subIdx: number) => (
-                          <span key={sub.id} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                          <span
+                            key={sub.id}
+                            draggable={true}
+                            onDragStart={(e) => handleDragStart(e, sub.id, cat.id)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => handleDrop(e, sub.id, cat.id)}
+                            className={`inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 transition-all ${
+                              draggedCatId === sub.id ? 'opacity-40 bg-indigo-100' : ''
+                            }`}
+                          >
+                            <GripVertical className="h-3 w-3 text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing shrink-0" title="Drag subcategory" />
                             <Tag className="h-3 w-3 text-indigo-600 shrink-0" />
                             <span>{sub.name}</span>
                             <div className="flex items-center gap-0.5 ml-1 border-l border-slate-300 pl-1">
@@ -917,6 +1071,7 @@ export default function AdminPortalPage() {
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedSellerForPenalty(null)}
                 className="p-1 text-slate-400 hover:text-slate-700"
               >
@@ -963,20 +1118,20 @@ export default function AdminPortalPage() {
               ) : (
                 <>
                   <div>
-                    <label className="text-slate-700 font-bold block mb-1">Penalty Fine Amount (₹ INR)</label>
+                    <label className="text-slate-700 font-bold block mb-1">Penalty Fine Amount (₹)</label>
                     <input
                       type="number"
                       value={penaltyFineAmount}
                       onChange={(e) => setPenaltyFineAmount(e.target.value)}
-                      min="100"
-                      step="50"
+                      placeholder="500"
                       required
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-900 font-extrabold focus:outline-none focus:border-rose-500 min-h-[44px]"
+                      min="1"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-rose-500"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-700 font-bold block mb-1">Reason for Suspension</label>
+                    <label className="text-slate-700 font-bold block mb-1">Reason for Account Suspension & Fine</label>
                     <textarea
                       value={penaltyReason}
                       onChange={(e) => setPenaltyReason(e.target.value)}
@@ -1113,7 +1268,7 @@ export default function AdminPortalPage() {
           <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-emerald-600" />
+                <IndianRupee className="h-5 w-5 text-emerald-600" />
                 <h3 className="text-base font-extrabold text-slate-900">
                   Seller Commission Override: {editingSellerCommission.businessName || editingSellerCommission.name}
                 </h3>
