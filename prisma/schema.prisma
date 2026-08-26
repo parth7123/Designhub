@@ -1,0 +1,250 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String        @id @default(uuid())
+  email              String        @unique
+  phone              String?       @unique
+  name               String
+  passwordHash       String
+  role               String        @default("BUYER") // ADMIN, SELLER, BUYER
+  status             String        @default("APPROVED") // PENDING_APPROVAL, APPROVED, REJECTED, SUSPENDED
+  avatarUrl          String?
+  bio                String?
+  
+  // Seller payout & bank info
+  razorpayAccountId  String?
+  businessName       String?
+  bankAccountNo      String?
+  ifscCode           String?
+  accountHolderName  String?
+  commissionOverride Float?
+
+  // Admin warnings, penalties & suspension enforcement
+  warningNotice      String?
+  penaltyFineAmount  Float?        @default(0)
+  penaltyReason      String?
+  penaltyPaid        Boolean       @default(false)
+  penaltyOrderId     String?
+
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  listings           Listing[]     @relation("SellerListings")
+  buyerOrders        Order[]       @relation("BuyerOrders")
+  sellerOrders       Order[]       @relation("SellerOrders")
+  reviews            Review[]      @relation("BuyerReviews")
+  sellerReviews      Review[]      @relation("SellerReviews")
+  disputesFiled      Dispute[]     @relation("BuyerDisputes")
+  disputesReceived   Dispute[]     @relation("SellerDisputes")
+  sentMessages       Message[]     @relation("SentMessages")
+  receivedMessages   Message[]     @relation("ReceivedMessages")
+  notifications      Notification[]
+  payoutLogs         PayoutLog[]
+  favorites          Favorite[]
+  following          Follow[]       @relation("FollowerRelation")
+  followers          Follow[]       @relation("SellerFollowedRelation")
+  downloadLogs       DownloadLog[]
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  icon        String?
+  parentId    String?
+  parent      Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryToSubcategory")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  listings    Listing[]
+}
+
+model Listing {
+  id                 String        @id @default(uuid())
+  title              String
+  slug               String        @unique
+  description        String
+  price              Float
+  isFree             Boolean       @default(false)
+  categoryId         String
+  category           Category      @relation(fields: [categoryId], references: [id])
+  sellerId           String
+  seller             User          @relation("SellerListings", fields: [sellerId], references: [id])
+  
+  // Storage references (Google Drive file IDs, hidden behind server proxy)
+  zipDriveFileId     String
+  previewDriveFileId String?
+  previewUrl         String?
+  previewUrls        String        @default("[]")
+  fileSizeBytes      Int           @default(0)
+  tags               String        @default("[]")
+  
+  status             String        @default("APPROVED") // PENDING_APPROVAL, APPROVED, REJECTED, PAUSED
+  ratingAvg          Float         @default(0)
+  reviewCount        Int           @default(0)
+  downloadCount      Int           @default(0)
+  viewsCount         Int           @default(0)
+  
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  orders             Order[]
+  reviews            Review[]
+  disputes           Dispute[]
+  messages           Message[]
+  favorites          Favorite[]
+  downloadLogs       DownloadLog[]
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  @@unique([userId, listingId])
+}
+
+model Follow {
+  id         String   @id @default(cuid())
+  followerId String
+  sellerId   String
+  createdAt  DateTime @default(now())
+  follower   User     @relation("FollowerRelation", fields: [followerId], references: [id])
+  seller     User     @relation("SellerFollowedRelation", fields: [sellerId], references: [id])
+  @@unique([followerId, sellerId])
+}
+
+model DownloadLog {
+  id           String   @id @default(cuid())
+  userId       String
+  listingId    String
+  type         String   // "FREE" | "PAID"
+  downloadedAt DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+  listing      Listing  @relation(fields: [listingId], references: [id])
+}
+
+model Order {
+  id                 String      @id @default(uuid())
+  buyerId            String
+  buyer              User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId           String
+  seller             User        @relation("SellerOrders", fields: [sellerId], references: [id])
+  listingId          String
+  listing            Listing     @relation(fields: [listingId], references: [id])
+  
+  amount             Float
+  platformFee        Float
+  sellerEarnings     Float
+  
+  razorpayOrderId    String      @unique
+  razorpayPaymentId  String?
+  razorpayTransferId String?
+  
+  status             String      @default("COMPLETED") // PENDING, COMPLETED, REFUNDED, DISPUTED
+  downloadCount      Int         @default(0)
+  
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  review             Review?
+  dispute            Dispute?
+  payoutLogs         PayoutLog[]
+  messages           Message[]
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  sellerId  String
+  seller    User     @relation("SellerReviews", fields: [sellerId], references: [id])
+  buyerId   String
+  buyer     User     @relation("BuyerReviews", fields: [buyerId], references: [id])
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id])
+  
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model Dispute {
+  id          String        @id @default(uuid())
+  orderId     String        @unique
+  order       Order         @relation(fields: [orderId], references: [id])
+  buyerId     String
+  buyer       User          @relation("BuyerDisputes", fields: [buyerId], references: [id])
+  sellerId    String
+  seller      User          @relation("SellerDisputes", fields: [sellerId], references: [id])
+  listingId   String
+  listing     Listing       @relation(fields: [listingId], references: [id])
+  
+  reason      String
+  description String
+  status      String        @default("OPEN") // OPEN, APPROVED_REFUND, REJECTED, RESOLVED
+  adminNotes  String?
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  listingId  String?
+  listing    Listing? @relation(fields: [listingId], references: [id])
+  orderId    String?
+  order      Order?   @relation(fields: [orderId], references: [id])
+  
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model PayoutLog {
+  id                 String   @id @default(uuid())
+  sellerId           String
+  seller             User     @relation(fields: [sellerId], references: [id])
+  orderId            String
+  order              Order    @relation(fields: [orderId], references: [id])
+  razorpayTransferId String
+  amount             Float
+  commission         Float
+  status             String   @default("PROCESSED")
+  createdAt          DateTime @default(now())
+}
+
+model AdminSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}

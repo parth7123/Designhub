@@ -1,0 +1,811 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Shield, Users, AlertTriangle, Layers, Settings, HardDrive, BarChart3, Plus, Tag, Trash2, X } from 'lucide-react';
+import { AdPlacement } from '../../components/ads/AdPlacement';
+
+export default function AdminPortalPage() {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<'analytics' | 'sellers' | 'penalties' | 'disputes' | 'categories' | 'settings'>('analytics');
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>({});
+  const [driveQuota, setDriveQuota] = useState<any>(null);
+  const [sellersList, setSellersList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Penalty Modal states
+  const [selectedSellerForPenalty, setSelectedSellerForPenalty] = useState<any | null>(null);
+  const [penaltyActionType, setPenaltyActionType] = useState<'WARN' | 'BLOCK_AND_FINE'>('WARN');
+  const [penaltyFineAmount, setPenaltyFineAmount] = useState('500');
+  const [penaltyReason, setPenaltyReason] = useState('');
+  const [warningText, setWarningText] = useState('');
+  const [submittingPenalty, setSubmittingPenalty] = useState(false);
+
+  // Category creation form states
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [selectedParentId, setSelectedParentId] = useState<string>('');
+  const [commissionRate, setCommissionRate] = useState('15');
+
+  const fetchAdminData = async () => {
+    try {
+      const [analyticRes, disputesRes, catRes, setRes, sellersRes] = await Promise.allSettled([
+        fetch('/api/admin/analytics'),
+        fetch('/api/disputes'),
+        fetch('/api/admin/categories'),
+        fetch('/api/admin/settings'),
+        fetch('/api/admin/sellers/penalty'),
+      ]);
+
+      if (analyticRes.status === 'fulfilled' && analyticRes.value.ok) {
+        const aData = await analyticRes.value.json();
+        setAnalytics(aData);
+      }
+
+      if (disputesRes.status === 'fulfilled' && disputesRes.value.ok) {
+        const dData = await disputesRes.value.json();
+        setDisputes(dData.disputes || []);
+      }
+
+      if (catRes.status === 'fulfilled' && catRes.value.ok) {
+        const cData = await catRes.value.json();
+        setCategories(cData.categories || []);
+      }
+
+      if (setRes.status === 'fulfilled' && setRes.value.ok) {
+        const sData = await setRes.value.json();
+        setSettings(sData.settings || {});
+        setDriveQuota(sData.driveQuota || null);
+        if (sData.settings?.global_commission_pct) {
+          setCommissionRate(sData.settings.global_commission_pct);
+        }
+      }
+
+      if (sellersRes.status === 'fulfilled' && sellersRes.value.ok) {
+        const selData = await sellersRes.value.json();
+        setSellersList(selData.sellers || []);
+      }
+    } catch (e) {
+      console.error('Admin data fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApplyPenalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSellerForPenalty) return;
+
+    setSubmittingPenalty(true);
+    try {
+      const res = await fetch('/api/admin/sellers/penalty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sellerId: selectedSellerForPenalty.id,
+          action: penaltyActionType,
+          warningNotice: warningText,
+          fineAmount: penaltyFineAmount,
+          reason: penaltyReason,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to apply action');
+        return;
+      }
+
+      setSelectedSellerForPenalty(null);
+      setPenaltyReason('');
+      setWarningText('');
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.message || 'Action failed');
+    } finally {
+      setSubmittingPenalty(false);
+    }
+  };
+
+  const handleDirectUnblock = async (sellerId: string) => {
+    if (!confirm('Are you sure you want to re-activate and unblock this seller studio?')) return;
+    try {
+      const res = await fetch('/api/admin/sellers/penalty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sellerId, action: 'UNBLOCK' }),
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (e) {}
+  };
+
+  const handleRevokeWarning = async (sellerId: string) => {
+    if (!confirm('Are you sure you want to revoke and clear this warning?')) return;
+    try {
+      const res = await fetch('/api/admin/sellers/penalty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sellerId, action: 'REVOKE_WARNING' }),
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
+
+  const handleSellerApproval = async (sellerId: string, action: 'APPROVE' | 'REJECT', commissionOverride?: string) => {
+    try {
+      const res = await fetch(`/api/admin/sellers/${sellerId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, commissionOverride }),
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (e) {}
+  };
+
+  const handleResolveDispute = async (disputeId: string, action: 'APPROVE_REFUND' | 'REJECT') => {
+    try {
+      const res = await fetch(`/api/admin/disputes/${disputeId}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, adminNotes: 'Actioned via Admin Portal' }),
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (e) {}
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName) return;
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCatName,
+          description: newCatDesc,
+          parentId: selectedParentId || null,
+        }),
+      });
+      if (res.ok) {
+        setNewCatName('');
+        setNewCatDesc('');
+        setSelectedParentId('');
+        fetchAdminData();
+      }
+    } catch (e) {}
+  };
+
+  const handleSaveCommission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'global_commission_pct', value: commissionRate }),
+      });
+      fetchAdminData();
+    } catch (e) {}
+  };
+
+  const handleDeleteCategory = async (catId: string, catName: string) => {
+    if (!confirm(`Are you sure you want to delete "${catName}"?`)) return;
+    try {
+      const res = await fetch(`/api/admin/categories?id=${catId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to delete category');
+        return;
+      }
+      fetchAdminData();
+    } catch (e: any) {
+      alert(e.message || 'Error deleting category');
+    }
+  };
+
+  if (loading || isAuthorized === false) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="rounded-3xl bg-red-50 border border-red-200/80 p-8 text-red-600 shadow-md flex flex-col items-center space-y-4 max-w-md">
+          <div className="rounded-full bg-red-100 p-4 animate-bounce">
+            <Shield className="h-12 w-12 text-red-600" />
+          </div>
+          <h2 className="text-xl font-extrabold text-slate-900">Access Restricted</h2>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Administrator authentication required to access the Governance Portal. Redirecting to secure login...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const parentCategories = categories.filter((c) => !c.parentId);
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8 sm:px-6 lg:px-8 space-y-8">
+      {/* Admin Title & Navigation Tabs */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+        <div>
+          <div className="flex items-center gap-2">
+            <Shield className="h-7 w-7 text-purple-600" />
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Admin Governance Portal</h1>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">Platform moderation, subcategories, payout logs & settings</p>
+        </div>
+
+        {/* Drive Storage Alert Widget */}
+        {driveQuota && (
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-xs">
+            <HardDrive className="h-5 w-5 text-indigo-600" />
+            <div>
+              <span className="font-bold text-slate-900">Hidden Google Drive Quota</span>
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                <span>{(driveQuota.usedBytes / (1024 * 1024)).toFixed(0)} MB used</span>
+                <div className="h-1.5 w-16 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                  <div className="h-full bg-indigo-600" style={{ width: `${driveQuota.usedPercent}%` }} />
+                </div>
+                <span className="font-bold text-indigo-600">{driveQuota.usedPercent}%</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Admin Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto scrollbar-none">
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+            activeTab === 'analytics' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <BarChart3 className="h-4 w-4" /> Analytics & Revenue
+        </button>
+        <button
+          onClick={() => setActiveTab('sellers')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+            activeTab === 'sellers' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Users className="h-4 w-4" /> KYC Approvals ({analytics?.overview?.pendingSellersCount || 0})
+        </button>
+        <button
+          onClick={() => setActiveTab('penalties')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+            activeTab === 'penalties' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-400" /> Warnings & Penalties ({sellersList.filter(s => s.status === 'SUSPENDED' || s.warningNotice).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('disputes')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+            activeTab === 'disputes' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <AlertTriangle className="h-4 w-4" /> Disputes ({analytics?.overview?.openDisputesCount || 0})
+        </button>
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+            activeTab === 'categories' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Layers className="h-4 w-4" /> Categories & Subcategories
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+            activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Settings className="h-4 w-4" /> Commission & Settings
+        </button>
+      </div>
+
+      {/* Tab 1: Analytics & Revenue */}
+      {activeTab === 'analytics' && analytics && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gross Revenue</span>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900">₹{analytics.overview.totalGrossRevenue.toLocaleString('en-IN')}</div>
+              <span className="text-[10px] text-slate-400 font-medium">Total volume processed</span>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Platform Fee</span>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-600">₹{analytics.overview.totalPlatformCommission.toLocaleString('en-IN')}</div>
+              <span className="text-[10px] text-slate-400 font-medium">Net platform commission</span>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Seller Payouts</span>
+              <div className="text-2xl sm:text-3xl font-black text-indigo-600">₹{analytics.overview.totalSellerPayouts.toLocaleString('en-IN')}</div>
+              <span className="text-[10px] text-slate-400 font-medium">Razorpay Route transfers</span>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Completed Orders</span>
+              <div className="text-2xl sm:text-3xl font-black text-purple-600">{analytics.overview.totalOrders}</div>
+              <span className="text-[10px] text-slate-400 font-medium">Verified buyer downloads</span>
+            </div>
+          </div>
+
+          <AdPlacement type="banner" slotId="admin_analytics_banner_001" />
+
+          {/* Top Sellers Table */}
+          <div className="space-y-4">
+            <h3 className="text-xl font-extrabold text-slate-900">Top Performing Sellers</h3>
+            <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-xs">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="border-b border-slate-100 text-slate-400 uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="p-3">Seller Business Name</th>
+                    <th className="p-3">Total Sales</th>
+                    <th className="p-3">Gross Earnings (₹)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {analytics.topSellers.map((s: any) => (
+                    <tr key={s.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-slate-900">{s.businessName}</td>
+                      <td className="p-3 font-bold text-indigo-600">{s.totalSales}</td>
+                      <td className="p-3 font-extrabold text-emerald-600">₹{s.grossEarnings.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Seller KYC Approvals */}
+      {activeTab === 'sellers' && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-extrabold text-slate-900">Seller Registration & KYC Queue</h3>
+          <div className="space-y-4">
+            {analytics?.overview?.pendingSellersCount === 0 ? (
+              <p className="text-xs text-slate-500 py-6">No seller accounts currently pending approval.</p>
+            ) : (
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-xs">
+                <p className="text-xs text-slate-600">Review pending seller onboarding KYC applications and configure Razorpay Route parameters.</p>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleSellerApproval('newbie@designhub.store', 'APPROVE')}
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
+                  >
+                    Approve Pending Seller
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2.5: Seller Warnings & Penalties Enforcement */}
+      {activeTab === 'penalties' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900">Seller Governance, Warnings & Fines</h3>
+              <p className="text-xs text-slate-500 mt-1">Issue official policy warnings, suspend creator studios, and mandate penalty fines to unblock accounts</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-xs">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="border-b border-slate-100 text-slate-400 uppercase text-[10px] font-bold">
+                <tr>
+                  <th className="p-3">Seller / Studio Name</th>
+                  <th className="p-3">Email</th>
+                  <th className="p-3">Account Status</th>
+                  <th className="p-3">Active Warning / Notice</th>
+                  <th className="p-3">Penalty Fine (₹)</th>
+                  <th className="p-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sellersList.length === 0 ? (
+                  <tr><td colSpan={6} className="p-6 text-center text-slate-400">No registered sellers found.</td></tr>
+                ) : (
+                  sellersList.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-slate-900">
+                        {s.businessName || s.name}
+                        <span className="text-[10px] text-slate-400 font-normal block">{s._count?.listings || 0} listings • {s._count?.sellerOrders || 0} orders</span>
+                      </td>
+                      <td className="p-3 text-slate-500">{s.email}</td>
+                      <td className="p-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                          s.status === 'SUSPENDED'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : s.status === 'APPROVED'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {s.status === 'SUSPENDED' ? '🚫 Blocked / Suspended' : s.status}
+                        </span>
+                      </td>
+                      <td className="p-3 max-w-xs truncate text-slate-600">
+                        {s.warningNotice ? (
+                          <span className="text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 block truncate">
+                            ⚠️ {s.warningNotice}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">None</span>
+                        )}
+                      </td>
+                      <td className="p-3 font-extrabold">
+                        {s.penaltyFineAmount && s.penaltyFineAmount > 0 ? (
+                          <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
+                            ₹{s.penaltyFineAmount.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">₹0</span>
+                        )}
+                      </td>
+                      <td className="p-3 flex items-center gap-2">
+                        {s.status === 'SUSPENDED' ? (
+                          <button
+                            onClick={() => handleDirectUnblock(s.id)}
+                            className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 shadow-xs"
+                          >
+                            Unblock Studio
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            {s.warningNotice && (
+                              <button
+                                onClick={() => handleRevokeWarning(s.id)}
+                                className="rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                                title="Revoke Warning"
+                              >
+                                Revoke Warning
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setSelectedSellerForPenalty(s);
+                                setPenaltyActionType('WARN');
+                                setWarningText('Policy Notice: Please ensure all uploaded ZIP assets adhere to DesignHub digital licensing terms.');
+                              }}
+                              className="rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                            >
+                              {s.warningNotice ? 'Edit Warning' : 'Issue Warning'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedSellerForPenalty(s);
+                                setPenaltyActionType('BLOCK_AND_FINE');
+                                setPenaltyFineAmount('1000');
+                                setPenaltyReason('Marketplace policy violation: Incompatible files reported by buyers.');
+                              }}
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 transition-colors"
+                            >
+                              Block & Issue Fine
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Disputes */}
+      {activeTab === 'disputes' && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-extrabold text-slate-900">Dispute & Refund Queue</h3>
+          <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-xs">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="border-b border-slate-100 text-slate-400 uppercase text-[10px] font-bold">
+                <tr>
+                  <th className="p-3">Reported Asset</th>
+                  <th className="p-3">Buyer</th>
+                  <th className="p-3">Reason</th>
+                  <th className="p-3">Description</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {disputes.length === 0 ? (
+                  <tr><td colSpan={6} className="p-6 text-center text-slate-400">No open dispute cases.</td></tr>
+                ) : (
+                  disputes.map((d) => (
+                    <tr key={d.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-slate-900">{d.listing?.title}</td>
+                      <td className="p-3 text-slate-500">{d.buyer?.name}</td>
+                      <td className="p-3 font-bold text-rose-600">{d.reason}</td>
+                      <td className="p-3 text-slate-600 max-w-xs truncate">{d.description}</td>
+                      <td className="p-3 font-bold text-amber-600">{d.status}</td>
+                      <td className="p-3 flex gap-2">
+                        {d.status === 'OPEN' && (
+                          <>
+                            <button
+                              onClick={() => handleResolveDispute(d.id, 'APPROVE_REFUND')}
+                              className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 shadow-xs"
+                            >
+                              Approve Refund
+                            </button>
+                            <button
+                              onClick={() => handleResolveDispute(d.id, 'REJECT')}
+                              className="rounded-lg bg-rose-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-rose-700 shadow-xs"
+                            >
+                              Dismiss Case
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Categories & Subcategories */}
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-extrabold text-slate-900">Categories & Subcategories Management</h3>
+          
+          <form onSubmit={handleCreateCategory} className="space-y-3 rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
+            <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="h-4 w-4 text-indigo-600" />
+              Create Category / Subcategory
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Category Name (e.g. 3D Icons)"
+                required
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+              />
+
+              <select
+                value={selectedParentId}
+                onChange={(e) => setSelectedParentId(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+              >
+                <option value="">Top-Level Category (No Parent)</option>
+                {parentCategories.map((p) => (
+                  <option key={p.id} value={p.id}>Subcategory under: {p.name}</option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                value={newCatDesc}
+                onChange={(e) => setNewCatDesc(e.target.value)}
+                placeholder="Description..."
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <button type="submit" className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 min-h-[44px]">
+                Create Category
+              </button>
+            </div>
+          </form>
+
+          {/* Categories Tree Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {parentCategories.map((cat) => (
+              <div key={cat.id} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3 shadow-xs flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h4 className="font-extrabold text-slate-900 text-sm">{cat.name}</h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                        {cat._count?.listings || 0} listings
+                      </span>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                        className="rounded-lg p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Delete Category"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed font-normal">{cat.description || 'Top-level category'}</p>
+
+                  {/* Subcategories */}
+                  {cat.children?.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Subcategories</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {cat.children.map((sub: any) => (
+                          <span key={sub.id} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 border border-slate-200 pl-2 pr-1 py-1 text-[11px] font-semibold text-slate-700">
+                            <Tag className="h-3 w-3 text-indigo-600" />
+                            <span>{sub.name}</span>
+                            <button
+                              onClick={() => handleDeleteCategory(sub.id, sub.name)}
+                              className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-100 rounded transition-colors"
+                              title="Delete Subcategory"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 5: Settings */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6 max-w-xl">
+          <h3 className="text-xl font-extrabold text-slate-900">Platform Settings & Monetization</h3>
+          <form onSubmit={handleSaveCommission} className="rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-xs">
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">Global Platform Commission (%)</label>
+              <input
+                type="number"
+                value={commissionRate}
+                onChange={(e) => setCommissionRate(e.target.value)}
+                step="0.5"
+                min="0"
+                max="100"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 min-h-[44px]"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">Deducted automatically on every sale during Razorpay Route split.</p>
+            </div>
+
+            <button type="submit" className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs min-h-[44px]">
+              Save Platform Settings
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Admin Action Modal: Warning / Penalty Fine & Suspension */}
+      {selectedSellerForPenalty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Seller Action: {selectedSellerForPenalty.businessName || selectedSellerForPenalty.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedSellerForPenalty(null)}
+                className="p-1 text-slate-400 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Action Type Toggle */}
+            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setPenaltyActionType('WARN')}
+                className={`py-2 rounded-xl transition-all ${
+                  penaltyActionType === 'WARN' ? 'bg-white text-amber-700 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                Issue Warning Notice
+              </button>
+              <button
+                type="button"
+                onClick={() => setPenaltyActionType('BLOCK_AND_FINE')}
+                className={`py-2 rounded-xl transition-all ${
+                  penaltyActionType === 'BLOCK_AND_FINE' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                Block Account & Issue Fine
+              </button>
+            </div>
+
+            <form onSubmit={handleApplyPenalty} className="space-y-4 text-xs">
+              {penaltyActionType === 'WARN' ? (
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Warning Notice Message</label>
+                  <textarea
+                    value={warningText}
+                    onChange={(e) => setWarningText(e.target.value)}
+                    rows={3}
+                    placeholder="Enter policy violation warning details..."
+                    required
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-amber-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">This warning will appear as a banner in the seller's studio and be emailed to them.</p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">Penalty Fine Amount (₹ INR)</label>
+                    <input
+                      type="number"
+                      value={penaltyFineAmount}
+                      onChange={(e) => setPenaltyFineAmount(e.target.value)}
+                      min="100"
+                      step="50"
+                      required
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-900 font-extrabold focus:outline-none focus:border-rose-500 min-h-[44px]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-700 font-bold block mb-1">Reason for Suspension</label>
+                    <textarea
+                      value={penaltyReason}
+                      onChange={(e) => setPenaltyReason(e.target.value)}
+                      rows={3}
+                      placeholder="e.g. Upload of corrupted files / copyright dispute / repeated buyer complaints..."
+                      required
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+
+                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[11px] text-rose-700">
+                    <strong>Enforcement Action:</strong> The seller studio will be immediately locked (status: SUSPENDED). The seller will not be able to publish new assets until they pay this penalty fine via Razorpay.
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSellerForPenalty(null)}
+                  className="px-4 py-2 font-bold text-slate-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingPenalty}
+                  className={`rounded-xl px-5 py-2.5 font-bold text-white shadow-md disabled:opacity-60 transition-all ${
+                    penaltyActionType === 'BLOCK_AND_FINE'
+                      ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20'
+                      : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
+                  }`}
+                >
+                  {submittingPenalty ? 'Applying...' : penaltyActionType === 'BLOCK_AND_FINE' ? 'Block & Issue Fine' : 'Send Warning'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
