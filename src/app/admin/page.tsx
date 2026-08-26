@@ -433,6 +433,12 @@ export default function AdminPortalPage() {
     );
   }
 
+  const formatRupees = (val: any): string => {
+    const num = Number(val);
+    if (isNaN(num)) return '0';
+    return num.toLocaleString('en-IN');
+  };
+
   const safeSellersList = Array.isArray(sellersList) ? sellersList : [];
   const safeCategories = Array.isArray(categories) ? categories : [];
   const safeDisputes = Array.isArray(disputes) ? disputes : [];
@@ -550,13 +556,13 @@ export default function AdminPortalPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-2 shadow-xs">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gross Revenue</span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900">₹{(analytics?.overview?.totalGrossRevenue || 0).toLocaleString('en-IN')}</div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900">₹{formatRupees(analytics?.overview?.totalGrossRevenue)}</div>
               <span className="text-[10px] text-slate-400 font-medium">Total volume processed</span>
             </div>
 
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-2 shadow-xs">
               <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Admin Net Platform Earnings</span>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-900">₹{(analytics?.overview?.totalPlatformEarnings || 0).toLocaleString('en-IN')}</div>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-900">₹{formatRupees(analytics?.overview?.totalPlatformEarnings)}</div>
               <span className="text-[10px] text-emerald-700 font-medium">{commissionRate}% Razorpay split commission</span>
             </div>
 
@@ -588,7 +594,7 @@ export default function AdminPortalPage() {
               <IndianRupee className="h-5 w-5 text-emerald-600" />
               <div>
                 <span className="text-[10px] uppercase font-extrabold text-emerald-700 block">Total Admin Commission Earned</span>
-                <span className="text-lg font-black text-emerald-900">₹{totalAdminCommissionEarned.toLocaleString('en-IN')}</span>
+                <span className="text-lg font-black text-emerald-900">₹{formatRupees(totalAdminCommissionEarned)}</span>
               </div>
             </div>
           </div>
@@ -709,12 +715,12 @@ export default function AdminPortalPage() {
                       </td>
                       <td className="p-3 font-medium text-slate-700">
                         <span className="font-bold text-slate-900 block">{s.completedSalesCount || s._count?.sellerOrders || 0} sales</span>
-                        <span className="text-[10px] text-slate-400">₹{(s.grossVolume || 0).toLocaleString('en-IN')} Vol</span>
+                        <span className="text-[10px] text-slate-400">₹{formatRupees(s?.grossVolume)} Vol</span>
                       </td>
                       <td className="p-3">
                         <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-100 border border-emerald-300 px-3 py-1 text-xs font-black text-emerald-800 shadow-2xs">
                           <IndianRupee className="h-3.5 w-3.5 text-emerald-600" />
-                          ₹{(s.commissionEarned || 0).toLocaleString('en-IN')}
+                          ₹{formatRupees(s?.commissionEarned)}
                         </span>
                       </td>
                       <td className="p-3">
@@ -736,9 +742,9 @@ export default function AdminPortalPage() {
                           <span className="text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 block truncate">
                             ⚠️ {s.warningNotice}
                           </span>
-                        ) : s.penaltyFineAmount && s.penaltyFineAmount > 0 ? (
+                        ) : s.penaltyFineAmount && Number(s.penaltyFineAmount) > 0 ? (
                           <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200 block">
-                            Penalty Fine: ₹{s.penaltyFineAmount.toLocaleString('en-IN')}
+                            Penalty Fine: ₹{formatRupees(s?.penaltyFineAmount)}
                           </span>
                         ) : (
                           <span className="text-slate-400 italic">None</span>
