@@ -10,7 +10,7 @@ interface AdPlacementProps {
 }
 
 export const AdPlacement: React.FC<AdPlacementProps> = ({ type, slotId = '1234567890', className = '' }) => {
-  const publisherId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID || 'ca-pub-1234567890123456';
+  const publisherId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID || 'ca-pub-1066955028311078';
 
   return (
     <div className={`my-6 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>

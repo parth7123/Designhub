@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans, Playfair_Display } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
@@ -35,6 +36,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="light">
+      <head>
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1066955028311078"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       <body className={`${plusJakarta.variable} ${playfair.variable} font-sans bg-[#FBF8F3] text-slate-900 antialiased min-h-screen flex flex-col`}>
         <ChunkErrorRecovery />
         <ScreenshotProtection />
