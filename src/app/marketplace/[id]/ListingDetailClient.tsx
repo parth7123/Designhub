@@ -204,18 +204,14 @@ export const ListingDetailClient: React.FC<ClientProps> = ({ listing, relatedLis
         <div className="lg:col-span-2 space-y-8">
           {/* Main Preview Frame */}
           <div className="space-y-3">
-            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-sm group select-none watermark-protected">
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-sm group">
               <ProtectedImage
                 src={activeImage}
                 alt={listing.title}
-                watermarkText="DESIGNHUB PROTECTED PREVIEW • DO NOT COPY"
               />
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 rounded-full bg-white/90 px-3.5 py-1 text-xs font-bold text-indigo-600 backdrop-blur-md shadow-xs border border-slate-200/60">
                 <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
                 {listing.category?.name}
-              </div>
-              <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5 rounded-full bg-slate-900/80 backdrop-blur-md px-3 py-1 text-[10px] font-bold text-white shadow-xs">
-                <span>🛡️ Protected Canvas Preview</span>
               </div>
             </div>
 

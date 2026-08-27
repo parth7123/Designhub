@@ -57,11 +57,10 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-xl sm:rounded-2xl border border-slate-200/80 bg-white shadow-xs transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-100/60 hover:border-indigo-200 animate-fade-in-up">
       {/* Preview Image Container */}
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100 watermark-protected select-none">
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100">
         <ProtectedImage
           src={listing.previewUrl || `/api/preview/${listing.id}`}
           alt={listing.title}
-          watermarkText="DESIGNHUB PREVIEW"
         />
         
         {/* Category Pill */}
