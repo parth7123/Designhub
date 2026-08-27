@@ -15,10 +15,11 @@ import {
   CheckCircle2,
   Sparkles,
   Layers,
-  Sparkle,
   Award,
   Zap,
-  Globe
+  Globe,
+  Box,
+  Folder
 } from 'lucide-react';
 
 export const revalidate = 0;
@@ -29,9 +30,13 @@ export default async function HomePage() {
   });
   const heroImageUrl = heroSetting?.value || null;
 
+  // 100% Dynamic Admin Categories from Database (Only top-level categories, ordered by displayOrder)
   const categories = await db.category.findMany({
-    take: 8,
-    include: { _count: { select: { listings: true } } },
+    where: { parentId: null },
+    include: {
+      _count: { select: { listings: true } },
+      children: { select: { id: true, name: true, slug: true } },
+    },
     orderBy: { displayOrder: 'asc' },
   });
 
@@ -55,37 +60,22 @@ export default async function HomePage() {
     },
   });
 
-  // Featured domain categories requested by user
-  const featuredDomains = [
-    {
-      title: 'Hotfix Designs',
-      slug: 'hotfix-design',
-      desc: 'Rhinestone & hotfix motif pattern ZIP files for garment creation',
-      icon: Sparkles,
-      color: 'from-amber-500/10 to-rose-500/10 text-amber-900 border-amber-200/80',
-    },
-    {
-      title: 'Embroidery Designs',
-      slug: 'embroidery',
-      desc: 'Multi-head machine stitch files, embroidery vectors & motifs',
-      icon: Layers,
-      color: 'from-purple-500/10 to-indigo-500/10 text-purple-900 border-purple-200/80',
-    },
-    {
-      title: 'Jacquard Designs',
-      slug: 'jacquard',
-      desc: 'Textile weaving patterns, sari borders & Jacquard loom designs',
-      icon: Globe,
-      color: 'from-emerald-500/10 to-teal-500/10 text-emerald-900 border-emerald-200/80',
-    },
-    {
-      title: 'Beads Designs',
-      slug: 'beads',
-      desc: 'Handbeaded artwork, sequins, and machine bead ornament files',
-      icon: Award,
-      color: 'from-rose-500/10 to-pink-500/10 text-rose-900 border-rose-200/80',
-    },
-  ];
+  const getCategoryIcon = (iconName?: string | null) => {
+    switch (iconName) {
+      case 'Sparkles':
+        return <Sparkles className="h-6 w-6 text-amber-900" />;
+      case 'Grid':
+        return <Layers className="h-6 w-6 text-purple-900" />;
+      case 'Globe':
+        return <Globe className="h-6 w-6 text-emerald-900" />;
+      case 'Box':
+        return <Award className="h-6 w-6 text-rose-900" />;
+      case 'Layout':
+        return <Tag className="h-6 w-6 text-[#8b263e]" />;
+      default:
+        return <Folder className="h-6 w-6 text-[#8b263e]" />;
+    }
+  };
 
   return (
     <div className="space-y-16 pb-16 bg-[#FBF8F3]">
@@ -175,51 +165,75 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 2. Highlighted Categories: Hotfix, Embroidery, Jacquard, Beads */}
+      {/* 2. Dynamic Categories Managed 100% by Admin */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-16">
         
         <section className="space-y-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-stone-300/80 pb-4 gap-4">
             <div>
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#8b263e]">FEATURED DOMAINS</span>
-              <h2 className="text-3xl font-serif text-slate-900 font-bold mt-1">Specialized Pattern Categories</h2>
-              <p className="text-xs text-slate-600 mt-1">Find production-ready pattern ZIP files crafted for textile & apparel manufacturing</p>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#8b263e]">EXPLORE MARKETPLACE</span>
+              <h2 className="text-3xl font-serif text-slate-900 font-bold mt-1">Pattern Categories</h2>
+              <p className="text-xs text-slate-600 mt-1">Browse production-ready pattern ZIP files added & managed by Admin</p>
             </div>
             <Link href="/marketplace" className="text-xs font-bold tracking-wider text-[#8b263e] hover:text-[#751d32] uppercase flex items-center gap-1">
               Browse All Categories <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
-          {/* Domain Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredDomains.map((domain, idx) => {
-              const IconComp = domain.icon;
-              return (
+          {/* 100% Dynamic DB Categories Grid */}
+          {categories.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {categories.map((cat) => (
                 <Link
-                  key={idx}
-                  href={`/marketplace?search=${encodeURIComponent(domain.title)}`}
-                  className={`group relative overflow-hidden rounded-3xl border bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl flex flex-col justify-between ${domain.color}`}
+                  key={cat.id}
+                  href={`/marketplace?category=${cat.slug}`}
+                  className="group relative overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-[#8b263e]/40 hover:shadow-xl flex flex-col justify-between"
                 >
                   <div className="space-y-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 border border-stone-200 group-hover:scale-110 transition-transform">
-                      <IconComp className="h-6 w-6" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 border border-stone-200 group-hover:scale-110 transition-transform">
+                        {getCategoryIcon(cat.icon)}
+                      </div>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        {cat._count?.listings || 0} patterns
+                      </span>
                     </div>
+
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#8b263e] transition-colors">{domain.title}</h3>
-                      <p className="text-xs text-slate-600 mt-1.5 leading-relaxed font-normal">{domain.desc}</p>
+                      <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#8b263e] transition-colors">{cat.name}</h3>
+                      <p className="text-xs text-slate-600 mt-1.5 leading-relaxed font-normal">
+                        {cat.description || 'Browse production-ready pattern ZIP files for garment creation'}
+                      </p>
+
+                      {/* Display Subcategories if present */}
+                      {cat.children && cat.children.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-3">
+                          {cat.children.slice(0, 3).map((sub: any) => (
+                            <span key={sub.id} className="text-[10px] font-semibold text-slate-500 bg-stone-100 px-2 py-0.5 rounded-md border border-stone-200">
+                              {sub.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="mt-6 flex items-center gap-2 text-xs font-extrabold text-[#8b263e] uppercase tracking-wider">
+
+                  <div className="mt-6 flex items-center gap-2 text-xs font-extrabold text-[#8b263e] uppercase tracking-wider border-t border-stone-100 pt-4">
                     <span>Explore Patterns</span>
                     <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
                   </div>
                 </Link>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-center space-y-2">
+              <span className="text-sm font-bold text-slate-800 block">No categories added yet</span>
+              <p className="text-xs text-slate-500">Categories added by the Admin in the Governance Portal will appear here dynamically.</p>
+            </div>
+          )}
         </section>
 
-        {/* 3. Trust & Security Section (Highest Platform Reliability) */}
+        {/* 3. Trust & Security Section */}
         <section className="rounded-3xl border border-stone-300/80 bg-stone-900 text-white p-8 sm:p-12 space-y-8 shadow-xl relative overflow-hidden">
           {/* Subtle Glow background */}
           <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-[#8b263e]/20 blur-3xl pointer-events-none" />
@@ -368,7 +382,7 @@ export default async function HomePage() {
           <div className="flex items-center justify-between border-b border-stone-300/60 pb-4">
             <div>
               <h2 className="text-2xl font-serif text-slate-900 font-bold">Trending Patterns</h2>
-              <p className="text-xs text-slate-600 mt-0.5">Popular hotfix, embroidery, and Jacquard assets downloaded this week</p>
+              <p className="text-xs text-slate-600 mt-0.5 font-normal">Popular hotfix, embroidery, and Jacquard assets downloaded this week</p>
             </div>
             <Link href="/marketplace?sortBy=popular" className="text-xs font-bold tracking-wider text-[#8b263e] hover:text-[#751d32] uppercase flex items-center gap-1">
               Browse Trending <ArrowRight className="h-3.5 w-3.5" />
