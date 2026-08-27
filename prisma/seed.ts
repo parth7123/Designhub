@@ -15,17 +15,16 @@ async function main() {
 
   await prisma.adminSetting.upsert({
     where: { key: 'adsense_publisher_id' },
-    update: { value: 'ca-pub-1234567890123456' },
-    create: { key: 'adsense_publisher_id', value: 'ca-pub-1234567890123456' },
+    update: { value: 'ca-pub-1066955028311078' },
+    create: { key: 'adsense_publisher_id', value: 'ca-pub-1066955028311078' },
   });
 
-  // 2. Categories
+  // 2. Categories for Metusk Marketplace
   const categories = [
-    { name: 'UI Kits & Dashboards', slug: 'ui-kits-dashboards', description: 'Premium UI components and admin dashboard templates', icon: 'Layout' },
-    { name: '3D Assets & Models', slug: '3d-assets-models', description: 'High-resolution 3D objects, avatars, and scenes', icon: 'Box' },
-    { name: 'Icons & Vector Packs', slug: 'icons-vector-packs', description: 'Custom icon sets, illustrations, and vector graphics', icon: 'Grid' },
-    { name: 'Web Templates', slug: 'web-templates', description: 'Responsive Framer, Webflow, and HTML templates', icon: 'Globe' },
-    { name: 'Typography & Fonts', slug: 'typography-fonts', description: 'Modern display fonts, serif typefaces, and font families', icon: 'Type' },
+    { name: 'Hotfix Designs', slug: 'hotfix-designs', description: 'Rhinestone & hotfix motif pattern ZIP files for garment creation', icon: 'Sparkles' },
+    { name: 'Embroidery Designs', slug: 'embroidery-designs', description: 'Multi-head machine stitch files, embroidery vectors & motifs', icon: 'Grid' },
+    { name: 'Jacquard Designs', slug: 'jacquard-designs', description: 'Textile weaving patterns, sari borders & Jacquard loom designs', icon: 'Globe' },
+    { name: 'Beads Designs', slug: 'beads-designs', description: 'Handbeaded artwork, sequins, and machine bead ornament files', icon: 'Box' },
   ];
 
   for (const cat of categories) {
@@ -62,4 +61,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

@@ -217,22 +217,6 @@ export default async function HomePage() {
               );
             })}
           </div>
-
-          {/* Dynamic DB Categories List */}
-          {categories.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-2">
-              {categories.map((cat) => (
-                <Link
-                  key={cat.id}
-                  href={`/marketplace?category=${cat.slug}`}
-                  className="rounded-2xl border border-stone-200/90 bg-white p-4 text-center shadow-2xs hover:border-[#8b263e] transition-colors"
-                >
-                  <span className="text-xs font-bold text-slate-900 block truncate">{cat.name}</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">{cat._count.listings} patterns</span>
-                </Link>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* 3. Trust & Security Section (Highest Platform Reliability) */}
