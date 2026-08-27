@@ -6,11 +6,10 @@ async function clean() {
   console.log('Cleaning all demo data from database...');
 
   await prisma.review.deleteMany({});
-  await prisma.orderItem.deleteMany({});
   await prisma.order.deleteMany({});
   await prisma.dispute.deleteMany({});
   await prisma.favorite.deleteMany({});
-  await prisma.follower.deleteMany({});
+  await prisma.follow.deleteMany({});
   await prisma.listing.deleteMany({});
 
   // Delete all non-admin users
