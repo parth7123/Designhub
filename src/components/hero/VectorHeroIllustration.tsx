@@ -1,18 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface VectorHeroIllustrationProps {
   customImageUrl?: string | null;
 }
 
 export const VectorHeroIllustration: React.FC<VectorHeroIllustrationProps> = ({ customImageUrl }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  const shouldRenderCustom = Boolean(customImageUrl) && !imageError;
+
   return (
     <div className="relative w-full aspect-square max-w-[520px] mx-auto flex items-center justify-center p-4">
       {/* Soft Glow Background Circle */}
       <div className="absolute inset-4 rounded-full bg-gradient-to-tr from-[#8b263e]/10 via-amber-500/10 to-indigo-500/10 blur-2xl pointer-events-none" />
 
-      {customImageUrl ? (
+      {shouldRenderCustom ? (
         <div className="relative w-full h-full rounded-3xl border border-stone-300/90 bg-white p-3 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.12)] backdrop-blur-sm flex flex-col justify-between overflow-hidden group transition-all">
           {/* Header Bar */}
           <div className="flex items-center justify-between border-b border-stone-200/80 pb-2.5 px-2 mb-2">
@@ -29,12 +34,23 @@ export const VectorHeroIllustration: React.FC<VectorHeroIllustrationProps> = ({ 
             </span>
           </div>
 
-          {/* Custom Uploaded Image */}
-          <div className="relative w-full h-[380px] sm:h-[400px] rounded-2xl overflow-hidden bg-stone-50 flex items-center justify-center border border-stone-200">
+          {/* Custom Uploaded Image with Fast Loading & Skeleton */}
+          <div className="relative w-full h-[380px] sm:h-[400px] rounded-2xl overflow-hidden bg-stone-100 flex items-center justify-center border border-stone-200">
+            {!imageLoaded && (
+              <div className="absolute inset-0 bg-stone-200 animate-pulse flex items-center justify-center text-xs font-bold text-stone-400">
+                Loading Hero Artwork...
+              </div>
+            )}
             <img
-              src={customImageUrl}
+              src={customImageUrl!}
               alt="Homepage Hero Banner"
-              className="w-full h-full object-cover rounded-2xl transition-transform duration-500 group-hover:scale-105"
+              loading="eager"
+              decoding="async"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
+              className={`w-full h-full object-cover rounded-2xl transition-all duration-500 group-hover:scale-105 ${
+                imageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
             />
           </div>
         </div>
