@@ -21,10 +21,10 @@ async function main() {
 
   // 2. Clean Official Production Categories
   const categories = [
-    { name: 'Hotfix Designs', slug: 'hotfix-designs', description: 'Rhinestone & hotfix motif pattern ZIP files for garment creation', icon: 'Sparkles' },
-    { name: 'Embroidery Designs', slug: 'embroidery-designs', description: 'Multi-head machine stitch files, embroidery vectors & motifs', icon: 'Grid' },
-    { name: 'Jacquard Designs', slug: 'jacquard-designs', description: 'Textile weaving patterns, sari borders & Jacquard loom designs', icon: 'Globe' },
-    { name: 'Beads Designs', slug: 'beads-designs', description: 'Handbeaded artwork, sequins, and machine bead ornament files', icon: 'Box' },
+    { name: 'Hotfix Designs', slug: 'hotfix-designs', description: 'Rhinestone & hotfix motif pattern ZIP files for garment creation', icon: 'Sparkles', displayOrder: 0 },
+    { name: 'Embroidery Designs', slug: 'embroidery-designs', description: 'Multi-head machine stitch files, embroidery vectors & motifs', icon: 'Grid', displayOrder: 1 },
+    { name: 'Jacquard Designs', slug: 'jacquard-designs', description: 'Textile weaving patterns, sari borders & Jacquard loom designs', icon: 'Globe', displayOrder: 2 },
+    { name: 'Beads Designs', slug: 'beads-designs', description: 'Handbeaded artwork, sequins, and machine bead ornament files', icon: 'Box', displayOrder: 3 },
   ];
 
   for (const cat of categories) {
@@ -35,30 +35,9 @@ async function main() {
     });
   }
 
-  // 3. Admin Account Setup (ID: 8799385445, Password: madhavmetusk@1410)
+  // 3. Official Production Admin Account Setup (ID: 8799385445, Password: madhavmetusk@1410)
   const passwordHash = await bcrypt.hash('madhavmetusk@1410', 10);
 
-  // Upsert for primary phone/email identification
-  await prisma.user.upsert({
-    where: { email: '8799385445@metusk.com' },
-    update: {
-      phone: '8799385445',
-      passwordHash,
-      role: 'ADMIN',
-      status: 'APPROVED',
-      name: 'Admin',
-    },
-    create: {
-      email: '8799385445@metusk.com',
-      phone: '8799385445',
-      name: 'Admin',
-      passwordHash,
-      role: 'ADMIN',
-      status: 'APPROVED',
-    },
-  });
-
-  // Also support entering literal '8799385445' in email field
   await prisma.user.upsert({
     where: { email: '8799385445' },
     update: {
