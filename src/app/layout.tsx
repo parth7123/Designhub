@@ -10,6 +10,7 @@ import { CartDrawer } from '../components/cart/CartDrawer';
 import { PageProgress } from '../components/layout/PageProgress';
 import { ScreenshotProtection } from '../components/layout/ScreenshotProtection';
 import { ChunkErrorRecovery } from '../components/layout/ChunkErrorRecovery';
+import { AdClickOverlay } from '../components/ads/AdClickOverlay';
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -47,6 +48,7 @@ export default function RootLayout({
       <body className={`${plusJakarta.variable} ${playfair.variable} font-sans bg-[#FBF8F3] text-slate-900 antialiased min-h-screen flex flex-col`}>
         <ChunkErrorRecovery />
         <ScreenshotProtection />
+        <AdClickOverlay />
         <WishlistProvider>
           <CartProvider>
             <PageProgress />

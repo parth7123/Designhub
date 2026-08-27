@@ -9,6 +9,11 @@ import { Search, ArrowRight, Layout, Box, Grid, Globe, Type, Store, Sparkles } f
 export const revalidate = 0;
 
 export default async function HomePage() {
+  const heroSetting = await db.adminSetting.findUnique({
+    where: { key: 'hero_image_url' },
+  });
+  const heroImageUrl = heroSetting?.value || null;
+
   const categories = await db.category.findMany({
     take: 6,
     include: { _count: { select: { listings: true } } },
@@ -111,9 +116,9 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Right Showcase (5 Cols): Pure Code SVG Vector Illustration */}
+          {/* Right Showcase (5 Cols): Vector Illustration or Admin Custom Hero Banner */}
           <div className="lg:col-span-5 relative flex justify-center">
-            <VectorHeroIllustration />
+            <VectorHeroIllustration customImageUrl={heroImageUrl} />
           </div>
 
         </div>

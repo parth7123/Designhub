@@ -52,6 +52,10 @@ export default function AdminPortalPage() {
   const [customCommissionVal, setCustomCommissionVal] = useState<string>('');
   const [savingSellerCommission, setSavingSellerCommission] = useState(false);
 
+  // Homepage Hero Banner customization state
+  const [heroImageUrl, setHeroImageUrl] = useState<string>('');
+  const [uploadingHero, setUploadingHero] = useState<boolean>(false);
+
   const fetchAdminData = async () => {
     try {
       const [analyticRes, disputesRes, catRes, setRes, sellersRes] = await Promise.allSettled([
@@ -83,6 +87,9 @@ export default function AdminPortalPage() {
         setDriveQuota(sData.driveQuota || null);
         if (sData.settings?.global_commission_pct) {
           setCommissionRate(sData.settings.global_commission_pct);
+        }
+        if (sData.settings?.hero_image_url) {
+          setHeroImageUrl(sData.settings.hero_image_url);
         }
       }
 
@@ -303,6 +310,60 @@ export default function AdminPortalPage() {
       }
     } catch (e) {
       console.error('Reorder error:', e);
+    }
+  };
+
+  const handleHeroImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Hero banner image must be under 10MB');
+      return;
+    }
+
+    setUploadingHero(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'hero_image_url', value: base64 }),
+        });
+        if (res.ok) {
+          setHeroImageUrl(base64);
+          alert('Homepage Hero Banner updated successfully!');
+        } else {
+          alert('Failed to update hero banner image.');
+        }
+      } catch (err: any) {
+        alert(err.message || 'Upload failed');
+      } finally {
+        setUploadingHero(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearHeroImage = async () => {
+    if (!confirm('Revert Homepage Hero back to default Vector Studio illustration?')) return;
+    setUploadingHero(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'hero_image_url', value: '' }),
+      });
+      if (res.ok) {
+        setHeroImageUrl('');
+        alert('Homepage Hero reset to default illustration!');
+      }
+    } catch (e) {
+      alert('Failed to reset image');
+    } finally {
+      setUploadingHero(false);
     }
   };
 
@@ -1084,6 +1145,54 @@ export default function AdminPortalPage() {
               Save Platform Settings
             </button>
           </form>
+
+          {/* Homepage Hero Banner Customization */}
+          <div className="rounded-3xl border border-stone-200 bg-white p-6 space-y-4 shadow-xs">
+            <div>
+              <h4 className="text-sm font-extrabold text-slate-900">Homepage Hero Banner Artwork Customizer</h4>
+              <p className="text-xs text-slate-500 mt-1">Upload a custom banner image to display on the homepage hero section anytime. (PNG, JPG, SVG up to 10MB)</p>
+            </div>
+
+            <div className="space-y-3">
+              {heroImageUrl ? (
+                <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-50 p-2 space-y-2">
+                  <img src={heroImageUrl} alt="Current Hero Banner" className="w-full h-44 object-cover rounded-xl" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                      ✓ Custom Hero Banner Active
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleClearHeroImage}
+                      disabled={uploadingHero}
+                      className="text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 px-3 py-1 rounded-lg border border-rose-200 transition-colors"
+                    >
+                      Reset to Default Vector SVG
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-6 text-center space-y-2">
+                  <span className="text-xs font-bold text-stone-600 block">Default Vector Studio Illustration Active</span>
+                  <span className="text-[11px] text-stone-400 block">Upload an image below to replace the homepage hero graphic anytime.</span>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  {heroImageUrl ? 'Upload Replacement Hero Image' : 'Upload New Hero Banner Image'}
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleHeroImageChange}
+                  disabled={uploadingHero}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                />
+                {uploadingHero && <span className="text-xs font-bold text-indigo-600 mt-2 block animate-pulse">Uploading new hero image...</span>}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
