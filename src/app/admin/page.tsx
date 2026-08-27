@@ -607,7 +607,7 @@ export default function AdminPortalPage() {
             activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Settings className="h-4 w-4" /> Commission & Settings
+          <Settings className="h-4 w-4" /> Commission & Settings (Hero Banner)
         </button>
       </div>
 
