@@ -4,9 +4,9 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding DesignHub database (Production Foundation)...');
+  console.log('Cleaning and Seeding Production Metusk.com Database...');
 
-  // 1. Admin Settings
+  // 1. Admin Settings Initialization
   await prisma.adminSetting.upsert({
     where: { key: 'global_commission_pct' },
     update: { value: '15' },
@@ -19,7 +19,7 @@ async function main() {
     create: { key: 'adsense_publisher_id', value: 'ca-pub-1066955028311078' },
   });
 
-  // 2. Categories for Metusk Marketplace
+  // 2. Clean Official Production Categories
   const categories = [
     { name: 'Hotfix Designs', slug: 'hotfix-designs', description: 'Rhinestone & hotfix motif pattern ZIP files for garment creation', icon: 'Sparkles' },
     { name: 'Embroidery Designs', slug: 'embroidery-designs', description: 'Multi-head machine stitch files, embroidery vectors & motifs', icon: 'Grid' },
@@ -35,22 +35,50 @@ async function main() {
     });
   }
 
-  // 3. Admin Account
-  const passwordHash = await bcrypt.hash('Password123!', 10);
+  // 3. Admin Account Setup (ID: 8799385445, Password: madhavmetusk@1410)
+  const passwordHash = await bcrypt.hash('madhavmetusk@1410', 10);
+
+  // Upsert for primary phone/email identification
   await prisma.user.upsert({
-    where: { email: 'admin@designhub.store' },
-    update: {},
-    create: {
-      email: 'admin@designhub.store',
-      name: 'Platform Admin',
+    where: { email: '8799385445@metusk.com' },
+    update: {
+      phone: '8799385445',
       passwordHash,
       role: 'ADMIN',
       status: 'APPROVED',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      name: 'Admin',
+    },
+    create: {
+      email: '8799385445@metusk.com',
+      phone: '8799385445',
+      name: 'Admin',
+      passwordHash,
+      role: 'ADMIN',
+      status: 'APPROVED',
     },
   });
 
-  console.log('Production database initialized successfully!');
+  // Also support entering literal '8799385445' in email field
+  await prisma.user.upsert({
+    where: { email: '8799385445' },
+    update: {
+      phone: '8799385445',
+      passwordHash,
+      role: 'ADMIN',
+      status: 'APPROVED',
+      name: 'Admin',
+    },
+    create: {
+      email: '8799385445',
+      phone: '8799385445',
+      name: 'Admin',
+      passwordHash,
+      role: 'ADMIN',
+      status: 'APPROVED',
+    },
+  });
+
+  console.log('Metusk.com Production Database Initialized Cleanly!');
 }
 
 main()
