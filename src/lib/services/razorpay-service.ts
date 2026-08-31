@@ -3,8 +3,8 @@ import crypto from 'crypto';
 import { db } from '../db';
 
 function getRazorpayInstance() {
-  const key_id = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TWODWnCh1s8CB5';
-  const key_secret = process.env.RAZORPAY_KEY_SECRET || 'VWK1TqFrb2PZ3zcRb9Sk1Yl1';
+  const key_id = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TUHtq7FjCBYSOe';
+  const key_secret = process.env.RAZORPAY_KEY_SECRET || 'k2QA7Om873kWVjAzDxhC5KuW';
 
   return new Razorpay({
     key_id,
@@ -12,7 +12,7 @@ function getRazorpayInstance() {
   });
 }
 
-const PUBLIC_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TWODWnCh1s8CB5';
+const PUBLIC_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TUHtq7FjCBYSOe';
 
 /**
  * Calculates platform fee and seller earnings based on admin commission settings or per-seller override
@@ -162,7 +162,7 @@ export function verifyPaymentSignature({
     return true;
   }
 
-  const keySecret = process.env.RAZORPAY_KEY_SECRET || 'VWK1TqFrb2PZ3zcRb9Sk1Yl1';
+  const keySecret = process.env.RAZORPAY_KEY_SECRET || 'k2QA7Om873kWVjAzDxhC5KuW';
 
   const generatedSignature = crypto
     .createHmac('sha256', keySecret)
