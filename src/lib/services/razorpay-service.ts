@@ -3,8 +3,8 @@ import crypto from 'crypto';
 import { db } from '../db';
 
 function getRazorpayInstance() {
-  const key_id = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TS7fK1wB9o1zGi';
-  const key_secret = process.env.RAZORPAY_KEY_SECRET || '0KIX8elZAjs1F0b78z3CclfG';
+  const key_id = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TWODWnCh1s8CB5';
+  const key_secret = process.env.RAZORPAY_KEY_SECRET || 'VWK1TqFrb2PZ3zcRb9Sk1Yl1';
 
   return new Razorpay({
     key_id,
@@ -12,7 +12,7 @@ function getRazorpayInstance() {
   });
 }
 
-const PUBLIC_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TS7fK1wB9o1zGi';
+const PUBLIC_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TWODWnCh1s8CB5';
 
 /**
  * Calculates platform fee and seller earnings based on admin commission settings or per-seller override
