@@ -16,37 +16,45 @@ export async function POST(
       return NextResponse.json({ error: 'Admin authorization required' }, { status: 403 });
     }
 
-    const { action, commissionOverride, adminNotes } = await req.json(); // action: 'APPROVE' | 'REJECT' | 'SUSPEND'
+    const { action, commissionOverride, adminNotes } = await req.json();
 
-    if (!['APPROVE', 'REJECT', 'SUSPEND'].includes(action)) {
-      return NextResponse.json({ error: 'Invalid approval action' }, { status: 400 });
+    const updateData: any = {};
+
+    if (action && ['APPROVE', 'REJECT', 'SUSPEND'].includes(action)) {
+      updateData.status = action === 'APPROVE' ? 'APPROVED' : action === 'REJECT' ? 'REJECTED' : 'SUSPENDED';
     }
 
-    const newStatus = action === 'APPROVE' ? 'APPROVED' : action === 'REJECT' ? 'REJECTED' : 'SUSPENDED';
+    if (commissionOverride !== undefined) {
+      if (commissionOverride === null || commissionOverride === '' || commissionOverride === 'none') {
+        updateData.commissionOverride = null;
+      } else {
+        const parsed = parseFloat(String(commissionOverride));
+        updateData.commissionOverride = isNaN(parsed) ? null : parsed;
+      }
+    }
 
     const seller = await db.user.update({
       where: { id: sellerId },
-      data: {
-        status: newStatus,
-        ...(commissionOverride !== undefined ? { commissionOverride: parseFloat(commissionOverride) } : {}),
-      },
+      data: updateData,
     });
 
-    // Send Notification to Seller
-    await createAndSendNotification({
-      userId: seller.id,
-      userEmail: seller.email,
-      title: `Seller Account ${newStatus === 'APPROVED' ? 'Approved — You are Live!' : 'Status Update'}`,
-      message: newStatus === 'APPROVED' 
-        ? 'Congratulations! Your seller account has been approved by admin. You can now publish design listings and start earning.'
-        : `Your seller account status has been set to ${newStatus}. ${adminNotes || ''}`,
-      type: 'APPROVAL',
-      link: '/seller',
-    });
+    if (action && ['APPROVE', 'REJECT', 'SUSPEND'].includes(action)) {
+      const newStatus = updateData.status;
+      await createAndSendNotification({
+        userId: seller.id,
+        userEmail: seller.email,
+        title: `Seller Account ${newStatus === 'APPROVED' ? 'Approved — You are Live!' : 'Status Update'}`,
+        message: newStatus === 'APPROVED' 
+          ? 'Congratulations! Your seller account has been approved by admin. You can now publish design listings and start earning.'
+          : `Your seller account status has been set to ${newStatus}. ${adminNotes || ''}`,
+        type: 'APPROVAL',
+        link: '/seller',
+      });
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Seller account ${newStatus.toLowerCase()} successfully`,
+      message: 'Seller account updated successfully',
       seller,
     });
   } catch (error: any) {
