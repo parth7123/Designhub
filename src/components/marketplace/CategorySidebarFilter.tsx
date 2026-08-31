@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { SlidersHorizontal, X, Check, Star, Sparkles } from 'lucide-react';
 import { AdPlacement } from '../ads/AdPlacement';
 
@@ -26,6 +27,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
   currentMaxPrice = '',
   currentMinRating = '',
 }) => {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState(currentCategory);
   const [selectedSubcategory, setSelectedSubcategory] = useState(currentSubcategory);
   const [pricing, setPricing] = useState(currentPricing);
@@ -34,7 +36,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
   const [minRating, setMinRating] = useState(currentMinRating);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Sync state when props change
+  // Sync state when props change from URL searchParams
   useEffect(() => {
     setSelectedCategory(currentCategory || 'all');
     setSelectedSubcategory(currentSubcategory || '');
@@ -50,9 +52,35 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
     ? categories.filter((c) => c.parentId === activeParent.id)
     : [];
 
-  const handleCategoryChange = (catSlug: string) => {
+  const handleCategoryClick = (catSlug: string) => {
     setSelectedCategory(catSlug);
     setSelectedSubcategory('');
+    // Instant URL update so category pills & listings are always 100% in sync
+    const params = new URLSearchParams();
+    if (catSlug && catSlug !== 'all') params.set('category', catSlug);
+    if (currentSearch) params.set('search', currentSearch);
+    if (pricing && pricing !== 'all') params.set('pricing', pricing);
+    if (sortBy && sortBy !== 'newest') params.set('sortBy', sortBy);
+    if (maxPrice) params.set('maxPrice', maxPrice);
+    if (minRating) params.set('minRating', minRating);
+
+    setIsMobileOpen(false);
+    router.push(`/marketplace?${params.toString()}`);
+  };
+
+  const handleSubcategoryClick = (subSlug: string) => {
+    setSelectedSubcategory(subSlug);
+    const params = new URLSearchParams();
+    if (selectedCategory && selectedCategory !== 'all') params.set('category', selectedCategory);
+    if (subSlug) params.set('subcategory', subSlug);
+    if (currentSearch) params.set('search', currentSearch);
+    if (pricing && pricing !== 'all') params.set('pricing', pricing);
+    if (sortBy && sortBy !== 'newest') params.set('sortBy', sortBy);
+    if (maxPrice) params.set('maxPrice', maxPrice);
+    if (minRating) params.set('minRating', minRating);
+
+    setIsMobileOpen(false);
+    router.push(`/marketplace?${params.toString()}`);
   };
 
   // Count active filters
@@ -66,7 +94,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
 
   const hasActiveFilters = activeFilterCount > 0 || currentSearch;
 
-  // Filter Form Content JSX with custom pill buttons (no native select popup positioning bugs on mobile!)
+  // Filter Form Content JSX
   const filterFormContent = (
     <form method="GET" className="space-y-5 text-xs" onSubmit={() => setIsMobileOpen(false)}>
       {currentSearch && <input type="hidden" name="search" value={currentSearch} />}
@@ -82,7 +110,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => handleCategoryChange('all')}
+            onClick={() => handleCategoryClick('all')}
             className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
               selectedCategory === 'all'
                 ? 'bg-indigo-600 text-white shadow-xs'
@@ -95,7 +123,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
             <button
               key={cat.id}
               type="button"
-              onClick={() => handleCategoryChange(cat.slug)}
+              onClick={() => handleCategoryClick(cat.slug)}
               className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
                 selectedCategory === cat.slug
                   ? 'bg-indigo-600 text-white shadow-xs'
@@ -115,7 +143,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
           <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
             <button
               type="button"
-              onClick={() => setSelectedSubcategory('')}
+              onClick={() => handleSubcategoryClick('')}
               className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all ${
                 !selectedSubcategory
                   ? 'bg-slate-900 text-white'
@@ -128,7 +156,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
               <button
                 key={sub.id}
                 type="button"
-                onClick={() => setSelectedSubcategory(sub.slug)}
+                onClick={() => handleSubcategoryClick(sub.slug)}
                 className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all ${
                   selectedSubcategory === sub.slug
                     ? 'bg-slate-900 text-white'
