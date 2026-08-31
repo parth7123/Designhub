@@ -52,35 +52,58 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
     ? categories.filter((c) => c.parentId === activeParent.id)
     : [];
 
-  const handleCategoryClick = (catSlug: string) => {
-    setSelectedCategory(catSlug);
-    setSelectedSubcategory('');
-    // Instant URL update so category pills & listings are always 100% in sync
+  const updateFiltersUrl = (overrides: {
+    cat?: string;
+    sub?: string;
+    prc?: string;
+    srt?: string;
+    maxP?: string;
+    minR?: string;
+  }) => {
+    const nextCat = overrides.cat !== undefined ? overrides.cat : selectedCategory;
+    const nextSub = overrides.sub !== undefined ? overrides.sub : selectedSubcategory;
+    const nextPrc = overrides.prc !== undefined ? overrides.prc : pricing;
+    const nextSrt = overrides.srt !== undefined ? overrides.srt : sortBy;
+    const nextMaxP = overrides.maxP !== undefined ? overrides.maxP : maxPrice;
+    const nextMinR = overrides.minR !== undefined ? overrides.minR : minRating;
+
     const params = new URLSearchParams();
-    if (catSlug && catSlug !== 'all') params.set('category', catSlug);
+    if (nextCat && nextCat !== 'all') params.set('category', nextCat);
+    if (nextSub) params.set('subcategory', nextSub);
     if (currentSearch) params.set('search', currentSearch);
-    if (pricing && pricing !== 'all') params.set('pricing', pricing);
-    if (sortBy && sortBy !== 'newest') params.set('sortBy', sortBy);
-    if (maxPrice) params.set('maxPrice', maxPrice);
-    if (minRating) params.set('minRating', minRating);
+    if (nextPrc && nextPrc !== 'all') params.set('pricing', nextPrc);
+    if (nextSrt && nextSrt !== 'newest') params.set('sortBy', nextSrt);
+    if (nextMaxP) params.set('maxPrice', nextMaxP);
+    if (nextMinR) params.set('minRating', nextMinR);
 
     setIsMobileOpen(false);
     router.push(`/marketplace?${params.toString()}`);
   };
 
+  const handleCategoryClick = (catSlug: string) => {
+    setSelectedCategory(catSlug);
+    setSelectedSubcategory('');
+    updateFiltersUrl({ cat: catSlug, sub: '' });
+  };
+
   const handleSubcategoryClick = (subSlug: string) => {
     setSelectedSubcategory(subSlug);
-    const params = new URLSearchParams();
-    if (selectedCategory && selectedCategory !== 'all') params.set('category', selectedCategory);
-    if (subSlug) params.set('subcategory', subSlug);
-    if (currentSearch) params.set('search', currentSearch);
-    if (pricing && pricing !== 'all') params.set('pricing', pricing);
-    if (sortBy && sortBy !== 'newest') params.set('sortBy', sortBy);
-    if (maxPrice) params.set('maxPrice', maxPrice);
-    if (minRating) params.set('minRating', minRating);
+    updateFiltersUrl({ sub: subSlug });
+  };
 
-    setIsMobileOpen(false);
-    router.push(`/marketplace?${params.toString()}`);
+  const handlePricingClick = (pType: string) => {
+    setPricing(pType);
+    updateFiltersUrl({ prc: pType });
+  };
+
+  const handleSortClick = (sId: string) => {
+    setSortBy(sId);
+    updateFiltersUrl({ srt: sId });
+  };
+
+  const handleRatingClick = (rId: string) => {
+    setMinRating(rId);
+    updateFiltersUrl({ minR: rId });
   };
 
   // Count active filters
@@ -96,7 +119,14 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
 
   // Filter Form Content JSX
   const filterFormContent = (
-    <form method="GET" className="space-y-5 text-xs" onSubmit={() => setIsMobileOpen(false)}>
+    <form
+      method="GET"
+      className="space-y-5 text-xs"
+      onSubmit={(e) => {
+        e.preventDefault();
+        updateFiltersUrl({});
+      }}
+    >
       {currentSearch && <input type="hidden" name="search" value={currentSearch} />}
       <input type="hidden" name="category" value={selectedCategory} />
       <input type="hidden" name="subcategory" value={selectedSubcategory} />
@@ -176,27 +206,27 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
         <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1 border border-slate-200">
           <button
             type="button"
-            onClick={() => setPricing('all')}
+            onClick={() => handlePricingClick('all')}
             className={`rounded-lg py-2 text-[11px] font-bold transition-all ${
-              pricing === 'all' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              pricing === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             All
           </button>
           <button
             type="button"
-            onClick={() => setPricing('paid')}
+            onClick={() => handlePricingClick('paid')}
             className={`rounded-lg py-2 text-[11px] font-bold transition-all ${
-              pricing === 'paid' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              pricing === 'paid' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Paid Only
           </button>
           <button
             type="button"
-            onClick={() => setPricing('free')}
+            onClick={() => handlePricingClick('free')}
             className={`rounded-lg py-2 text-[11px] font-bold transition-all ${
-              pricing === 'free' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              pricing === 'free' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Free Assets
@@ -218,7 +248,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
             <button
               key={item.id}
               type="button"
-              onClick={() => setSortBy(item.id)}
+              onClick={() => handleSortClick(item.id)}
               className={`rounded-xl px-2.5 py-2 text-[11px] font-bold text-left transition-all flex items-center justify-between border ${
                 sortBy === item.id
                   ? 'border-indigo-600 bg-indigo-50/70 text-indigo-700'
@@ -257,7 +287,7 @@ export const CategorySidebarFilter: React.FC<CategorySidebarFilterProps> = ({
             <button
               key={item.id}
               type="button"
-              onClick={() => setMinRating(item.id)}
+              onClick={() => handleRatingClick(item.id)}
               className={`rounded-xl py-2 px-1 text-[11px] font-bold text-center transition-all border ${
                 minRating === item.id
                   ? 'border-indigo-600 bg-indigo-50/70 text-indigo-700'

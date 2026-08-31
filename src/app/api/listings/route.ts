@@ -38,9 +38,17 @@ export async function GET(req: NextRequest) {
     }
 
     if (pricing === 'free') {
-      andConditions.push({ isFree: true });
+      andConditions.push({
+        OR: [
+          { isFree: true },
+          { price: 0 },
+        ],
+      });
     } else if (pricing === 'paid') {
-      andConditions.push({ isFree: false });
+      andConditions.push({
+        isFree: false,
+        price: { gt: 0 },
+      });
     }
 
     if (query && query.trim()) {

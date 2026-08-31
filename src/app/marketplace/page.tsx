@@ -53,9 +53,17 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
   }
 
   if (pricing === 'free') {
-    andConditions.push({ isFree: true });
+    andConditions.push({
+      OR: [
+        { isFree: true },
+        { price: 0 },
+      ],
+    });
   } else if (pricing === 'paid') {
-    andConditions.push({ isFree: false });
+    andConditions.push({
+      isFree: false,
+      price: { gt: 0 },
+    });
   }
 
   if (search && search.trim()) {
