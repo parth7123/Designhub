@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Checkout error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to initiate checkout' }, { status: 500 });
+    const detailMsg = error?.error?.description || error?.message || 'Failed to initiate checkout';
+    return NextResponse.json({ error: detailMsg }, { status: 500 });
   }
 }

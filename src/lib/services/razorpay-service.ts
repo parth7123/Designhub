@@ -96,8 +96,8 @@ export async function createRazorpayOrder({
     },
   };
 
-  // If seller has a linked Razorpay Route account, add transfers split
-  if (listing.seller.razorpayAccountId) {
+  // If seller has a linked Razorpay Route account, attempt transfers split
+  if (listing.seller.razorpayAccountId && !listing.seller.razorpayAccountId.startsWith('acc_rzp_route_')) {
     options.transfers = [
       {
         account: listing.seller.razorpayAccountId,
@@ -125,9 +125,9 @@ export async function createRazorpayOrder({
     };
   } catch (error: any) {
     // If Route split failed, retry standard order without transfers
-    if (options.transfers) {
-      console.warn('Razorpay Route transfers split failed, retrying standard order:', error?.error?.description || error.message);
-      delete options.transfers;
+    console.warn('Razorpay order creation with transfers failed, retrying standard order:', error?.error?.description || error?.message || error);
+    delete options.transfers;
+    try {
       const fallbackOrder = await razorpay.orders.create(options);
       return {
         razorpayOrderId: fallbackOrder.id,
@@ -139,9 +139,10 @@ export async function createRazorpayOrder({
         sellerEarnings,
         isFree: false,
       };
+    } catch (err2: any) {
+      console.error('Standard Razorpay order creation failed:', err2?.error?.description || err2?.message || err2);
+      throw new Error(err2?.error?.description || err2?.message || 'Failed to create Razorpay Order');
     }
-    console.error('Razorpay Order Creation Error:', error);
-    throw new Error(error?.error?.description || error?.message || 'Failed to create Razorpay Order');
   }
 }
 
