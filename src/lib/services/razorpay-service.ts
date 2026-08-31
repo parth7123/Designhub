@@ -47,7 +47,7 @@ export async function calculateCommission(itemPrice: number, sellerId: string) {
 }
 
 /**
- * Creates a Razorpay Order with automated Route split transfers for seller
+ * Creates a real Razorpay Order
  */
 export async function createRazorpayOrder({
   listingId,
@@ -68,7 +68,7 @@ export async function createRazorpayOrder({
   const { platformFee, sellerEarnings } = await calculateCommission(listing.price, listing.sellerId);
   const amountInPaise = Math.round(listing.price * 100);
 
-  // If design asset is free or 0 price, bypass Razorpay order creation
+  // Free design asset bypass
   if (listing.isFree || listing.price === 0 || amountInPaise <= 0) {
     return {
       razorpayOrderId: `free_order_${Date.now()}_${listingId.substring(0, 5)}`,
@@ -124,44 +124,29 @@ export async function createRazorpayOrder({
       isFree: false,
     };
   } catch (error: any) {
-    // If transfers split failed (e.g. invalid route test account), retry order creation without transfers
+    // If Route split failed, retry standard order without transfers
     if (options.transfers) {
       console.warn('Razorpay Route transfers split failed, retrying standard order:', error?.error?.description || error.message);
       delete options.transfers;
-      try {
-        const fallbackOrder = await razorpay.orders.create(options);
-        return {
-          razorpayOrderId: fallbackOrder.id,
-          amount: listing.price,
-          currency: 'INR',
-          keyId: PUBLIC_KEY_ID,
-          listing,
-          platformFee,
-          sellerEarnings,
-          isFree: false,
-        };
-      } catch (err2: any) {
-        console.warn('Razorpay fallback order error, using sandbox order format:', err2?.message);
-      }
+      const fallbackOrder = await razorpay.orders.create(options);
+      return {
+        razorpayOrderId: fallbackOrder.id,
+        amount: listing.price,
+        currency: 'INR',
+        keyId: PUBLIC_KEY_ID,
+        listing,
+        platformFee,
+        sellerEarnings,
+        isFree: false,
+      };
     }
-
-    // Fallback sandbox order structure so checkout process never crashes with 500 error
-    const fallbackId = `order_sim_${Date.now()}_${listingId.substring(0, 5)}`;
-    return {
-      razorpayOrderId: fallbackId,
-      amount: listing.price,
-      currency: 'INR',
-      keyId: PUBLIC_KEY_ID,
-      listing,
-      platformFee,
-      sellerEarnings,
-      isFree: false,
-    };
+    console.error('Razorpay Order Creation Error:', error);
+    throw new Error(error?.error?.description || error?.message || 'Failed to create Razorpay Order');
   }
 }
 
 /**
- * Verifies Razorpay Payment Signature
+ * Verifies Razorpay Payment Signature with HMAC SHA-256
  */
 export function verifyPaymentSignature({
   razorpayOrderId,
@@ -172,12 +157,11 @@ export function verifyPaymentSignature({
   razorpayPaymentId: string;
   razorpaySignature: string;
 }): boolean {
-  // If simulated/free order, signature is valid
-  if (razorpayOrderId.startsWith('free_order_') || razorpayOrderId.startsWith('order_sim_')) {
+  if (razorpayOrderId.startsWith('free_order_')) {
     return true;
   }
 
-  const keySecret = process.env.RAZORPAY_KEY_SECRET || 'k2QA7Om873kWVjAzDxhC5KuW';
+  const keySecret = process.env.RAZORPAY_KEY_SECRET || 'VWK1TqFrb2PZ3zcRb9Sk1Yl1';
 
   const generatedSignature = crypto
     .createHmac('sha256', keySecret)
@@ -206,7 +190,6 @@ export async function createRazorpayLinkedAccount({
   const razorpay = getRazorpayInstance();
 
   try {
-    // Attempt Route account creation via Razorpay API
     const account = await (razorpay as any).accounts.create({
       name,
       email,
@@ -225,7 +208,6 @@ export async function createRazorpayLinkedAccount({
     return account.id as string;
   } catch (err) {
     console.warn('Razorpay Route API linked account creation fallback:', err);
-    // Returns simulated linked account ID for sandbox testing
     return `acc_rzp_route_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   }
 }

@@ -23,7 +23,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
     setError(null);
 
     try {
-      // 1. Create real order on Razorpay backend (and record PENDING order in DB)
+      // 1. Call backend API to create real Razorpay Order
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -35,17 +35,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
         throw new Error(data.error || 'Failed to initiate checkout');
       }
 
-      // If free or simulated fallback order, verify and complete immediately
-      if (data.isFree || data.razorpayOrderId?.startsWith('order_sim_') || data.razorpayOrderId?.startsWith('free_order_')) {
+      // If free item, process free download directly
+      if (data.isFree) {
         await verifyAndCompletePayment(
           data.razorpayOrderId,
-          `pay_sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          'simulated_valid_signature'
+          `free_pay_${Date.now()}`,
+          'free_order_valid'
         );
         return;
       }
 
-      // 2. Dynamically load official Razorpay checkout script
+      // 2. Load official Razorpay checkout script (checkout.js)
       const loadScript = (): Promise<boolean> => {
         return new Promise((resolve) => {
           if ((window as any).Razorpay) {
@@ -63,9 +63,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
       const loaded = await loadScript();
 
       if (!loaded || typeof (window as any).Razorpay === 'undefined') {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+        throw new Error('Razorpay checkout SDK failed to load. Please check your internet connection.');
       }
 
+      // 3. Configure Real Razorpay Modal Options
       const options = {
         key: data.keyId,
         amount: Math.round(data.amount * 100),
@@ -93,11 +94,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
         },
       };
 
+      // 4. Open Real Razorpay Payment Window
       const paymentObject = new (window as any).Razorpay(options);
-      
+
       paymentObject.on('payment.failed', function (response: any) {
         console.error('Razorpay payment failed:', response.error);
-        setError(response.error?.description || 'Payment was declined or failed.');
+        setError(response.error?.description || 'Payment was declined or cancelled.');
         setLoading(false);
       });
 
@@ -109,7 +111,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
     }
   };
 
-  // Called after real Razorpay payment success with real cryptographic signature
+  // Called after real Razorpay payment succeeds to verify HMAC signature
   const verifyAndCompletePayment = async (
     razorpayOrderId: string,
     razorpayPaymentId: string,
@@ -244,7 +246,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Connecting to Razorpay Gateway...
+                  Opening Razorpay Gateway...
                 </>
               ) : (
                 <>
