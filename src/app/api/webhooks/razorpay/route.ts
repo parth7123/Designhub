@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '../../../../lib/db';
 import { createAndSendNotification } from '../../../../lib/services/email-service';
+import { verifyPaymentSignature } from '../../../../lib/services/razorpay-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     const event = JSON.parse(rawBody);
 
-    // Verify signature if present (real Razorpay webhook call)
+    // 1. Verify signature if present (real Razorpay webhook call)
     if (headerSignature) {
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
@@ -23,19 +24,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // For client-side calls after payment success: verify razorpay_signature if provided
+    // 2. For client-side calls after payment success: verify signature
     if (event.razorpay_order_id && event.razorpay_payment_id && event.razorpay_signature) {
-      const keySecret = process.env.RAZORPAY_KEY_SECRET;
-      if (!keySecret) {
-        return NextResponse.json({ error: 'Server payment configuration missing' }, { status: 500 });
-      }
+      const isValid = verifyPaymentSignature({
+        razorpayOrderId: event.razorpay_order_id,
+        razorpayPaymentId: event.razorpay_payment_id,
+        razorpaySignature: event.razorpay_signature,
+      });
 
-      const expectedSig = crypto
-        .createHmac('sha256', keySecret)
-        .update(`${event.razorpay_order_id}|${event.razorpay_payment_id}`)
-        .digest('hex');
-
-      if (expectedSig !== event.razorpay_signature) {
+      if (!isValid) {
         return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 });
       }
     } else if (!headerSignature) {
@@ -43,10 +40,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing authentication signatures' }, { status: 401 });
     }
 
-    if (event.event === 'order.paid' || event.event === 'payment.captured') {
-      const payment = event.payload.payment.entity;
-      const razorpayOrderId = payment.order_id;
-      const razorpayPaymentId = payment.id;
+    if (event.event === 'order.paid' || event.event === 'payment.captured' || !event.event) {
+      const payment = event.payload?.payment?.entity || {
+        id: event.razorpay_payment_id,
+        order_id: event.razorpay_order_id,
+        amount: 0,
+      };
+
+      const razorpayOrderId = payment.order_id || event.razorpay_order_id;
+      const razorpayPaymentId = payment.id || event.razorpay_payment_id;
 
       const order = await db.order.findUnique({
         where: { razorpayOrderId },
@@ -65,6 +67,12 @@ export async function POST(req: NextRequest) {
             status: 'COMPLETED',
             razorpayPaymentId,
           },
+        });
+
+        // Increment listing download count
+        await db.listing.update({
+          where: { id: order.listingId },
+          data: { downloadCount: { increment: 1 } },
         });
 
         // Log Payout
