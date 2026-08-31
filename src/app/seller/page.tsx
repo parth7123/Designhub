@@ -106,9 +106,28 @@ export default function SellerDashboardPage() {
       return;
     }
 
+    // Validate product file extension (.zip, .rar, .7z)
+    const zipName = zipFile.name.toLowerCase();
+    const validZipExts = ['.zip', '.rar', '.7z'];
+    if (!validZipExts.some((ext) => zipName.endsWith(ext))) {
+      setUploadMsg(`Invalid product file "${zipFile.name}". Only .zip, .rar, or .7z archives are allowed.`);
+      return;
+    }
+
     const filesToUpload = previewFiles.length > 0 ? previewFiles : (previewFile ? [previewFile] : []);
     if (filesToUpload.length < 1 || filesToUpload.length > 4) {
       setUploadMsg('Please select minimum 1 and maximum 4 preview images.');
+      return;
+    }
+
+    // Validate preview image extensions (.jpg, .jpeg, .png, .webp)
+    const validImgExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    const invalidImg = filesToUpload.find((f) => {
+      const name = f.name.toLowerCase();
+      return !validImgExts.some((ext) => name.endsWith(ext));
+    });
+    if (invalidImg) {
+      setUploadMsg(`Invalid preview file "${invalidImg.name}". Only JPG, PNG, and WEBP images are allowed.`);
       return;
     }
 
@@ -739,17 +758,30 @@ export default function SellerDashboardPage() {
                   </label>
                   <input
                     type="file"
-                    accept=".zip,.rar,.7z"
-                    onChange={(e) => setZipFile(e.target.files?.[0] || null)}
+                    accept=".zip,.rar,.7z,application/zip,application/x-zip-compressed,application/x-rar-compressed,application/x-7z-compressed"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const name = file.name.toLowerCase();
+                        const validExts = ['.zip', '.rar', '.7z'];
+                        if (!validExts.some((ext) => name.endsWith(ext))) {
+                          alert(`Invalid file "${file.name}". Only .zip, .rar, or .7z archives are allowed as product files.`);
+                          e.target.value = '';
+                          setZipFile(null);
+                          return;
+                        }
+                      }
+                      setZipFile(file || null);
+                    }}
                     required
                     className="text-slate-600 text-[11px]"
                   />
-                  <p className="text-[10px] text-slate-500">Allowed size: 100MB to 200MB. Accessible to buyers after purchase.</p>
+                  <p className="text-[10px] text-slate-500">Allowed formats: .zip, .rar, .7z. Max size: 200MB.</p>
                 </div>
 
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-700 text-xs">Public Preview Images (1 to 4 JPG/PNG)</label>
+                    <label className="font-bold text-slate-700 text-xs">Public Preview Images (1 to 4 JPG/PNG/WEBP)</label>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                       previewFiles.length >= 1 && previewFiles.length <= 4 
                         ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
@@ -761,10 +793,22 @@ export default function SellerDashboardPage() {
                   
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
                     multiple
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
+                      const validExts = ['.jpg', '.jpeg', '.png', '.webp'];
+                      const invalidFiles = files.filter((f) => {
+                        const name = f.name.toLowerCase();
+                        return !validExts.some((ext) => name.endsWith(ext));
+                      });
+                      if (invalidFiles.length > 0) {
+                        alert(`Invalid file format: ${invalidFiles.map((f) => f.name).join(', ')}. Only JPG, PNG, and WEBP preview images are allowed.`);
+                        e.target.value = '';
+                        setPreviewFiles([]);
+                        setPreviewFile(null);
+                        return;
+                      }
                       if (files.length > 4) {
                         alert('Maximum 4 preview images allowed. Selecting the first 4 images.');
                       }

@@ -20,8 +20,11 @@ export async function POST(req: NextRequest) {
       buyerId: session.userId,
     });
 
-    // Create a PENDING order in DB so webhook can find it after payment
-    await db.order.upsert({
+    const isFreeAsset = checkoutData.isFree || checkoutData.amount === 0;
+    const initialStatus = isFreeAsset ? 'PAID' : 'PENDING';
+
+    // Create order record in DB
+    const order = await db.order.upsert({
       where: { razorpayOrderId: checkoutData.razorpayOrderId },
       create: {
         razorpayOrderId: checkoutData.razorpayOrderId,
@@ -31,14 +34,24 @@ export async function POST(req: NextRequest) {
         amount: checkoutData.amount,
         platformFee: checkoutData.platformFee,
         sellerEarnings: checkoutData.sellerEarnings,
-        status: 'PENDING',
+        status: initialStatus,
       },
       update: {},
     });
 
+    if (isFreeAsset) {
+      // Increment listing download count for free orders
+      await db.listing.update({
+        where: { id: checkoutData.listing.id },
+        data: { downloadCount: { increment: 1 } },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       ...checkoutData,
+      orderId: order.id,
+      isFree: isFreeAsset,
       buyer: {
         name: session.name,
         email: session.email,

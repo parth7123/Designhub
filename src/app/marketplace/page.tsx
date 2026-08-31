@@ -36,42 +36,51 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
 
   const parentCategories = categories.filter((c) => !c.parentId);
 
-  const where: any = { status: 'APPROVED' };
+  const andConditions: any[] = [];
+  andConditions.push({ status: 'APPROVED' });
 
   if (subcategory && subcategory !== 'all') {
-    where.category = { slug: subcategory };
+    andConditions.push({
+      category: { slug: { equals: subcategory, mode: 'insensitive' } },
+    });
   } else if (category && category !== 'all') {
-    where.category = {
+    andConditions.push({
       OR: [
-        { slug: category },
-        { parent: { slug: category } },
+        { category: { slug: { equals: category, mode: 'insensitive' } } },
+        { category: { parent: { slug: { equals: category, mode: 'insensitive' } } } },
       ],
-    };
+    });
   }
 
   if (pricing === 'free') {
-    where.isFree = true;
+    andConditions.push({ isFree: true });
   } else if (pricing === 'paid') {
-    where.isFree = false;
+    andConditions.push({ isFree: false });
   }
 
-  if (search) {
-    where.OR = [
-      { title: { contains: search } },
-      { description: { contains: search } },
-      { tags: { contains: search } },
-    ];
+  if (search && search.trim()) {
+    const q = search.trim();
+    andConditions.push({
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { tags: { contains: q, mode: 'insensitive' } },
+      ],
+    });
   }
 
   if (minPrice || maxPrice) {
-    where.price = {};
-    if (minPrice) where.price.gte = parseFloat(minPrice);
-    if (maxPrice) where.price.lte = parseFloat(maxPrice);
+    const priceCond: any = {};
+    if (minPrice && !isNaN(parseFloat(minPrice))) priceCond.gte = parseFloat(minPrice);
+    if (maxPrice && !isNaN(parseFloat(maxPrice))) priceCond.lte = parseFloat(maxPrice);
+    andConditions.push({ price: priceCond });
   }
 
-  if (minRating) {
-    where.ratingAvg = { gte: parseFloat(minRating) };
+  if (minRating && !isNaN(parseFloat(minRating))) {
+    andConditions.push({ ratingAvg: { gte: parseFloat(minRating) } });
   }
+
+  const where = { AND: andConditions };
 
   let orderBy: any = { createdAt: 'desc' };
   if (sortBy === 'price_asc') orderBy = { price: 'asc' };

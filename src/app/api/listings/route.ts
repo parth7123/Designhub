@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const categorySlug = searchParams.get('category');
+    const subcategorySlug = searchParams.get('subcategory');
     const query = searchParams.get('search');
     const minPrice = searchParams.get('minPrice');
     const maxPrice = searchParams.get('maxPrice');
@@ -15,48 +16,56 @@ export async function GET(req: NextRequest) {
     const sellerId = searchParams.get('sellerId');
     const pricing = searchParams.get('pricing'); // 'all', 'free', 'paid'
 
-    const where: any = {
-      status: 'APPROVED',
-    };
+    const andConditions: any[] = [];
 
     if (sellerId) {
-      where.sellerId = sellerId;
-      delete where.status; // Allow seller to see all their own listings
+      andConditions.push({ sellerId });
+    } else {
+      andConditions.push({ status: 'APPROVED' });
     }
 
-    if (categorySlug && categorySlug !== 'all') {
-      // Search by category slug or parent category slug
-      where.category = {
+    if (subcategorySlug && subcategorySlug !== 'all') {
+      andConditions.push({
+        category: { slug: { equals: subcategorySlug, mode: 'insensitive' } },
+      });
+    } else if (categorySlug && categorySlug !== 'all') {
+      andConditions.push({
         OR: [
-          { slug: categorySlug },
-          { parent: { slug: categorySlug } },
+          { category: { slug: { equals: categorySlug, mode: 'insensitive' } } },
+          { category: { parent: { slug: { equals: categorySlug, mode: 'insensitive' } } } },
         ],
-      };
+      });
     }
 
     if (pricing === 'free') {
-      where.isFree = true;
+      andConditions.push({ isFree: true });
     } else if (pricing === 'paid') {
-      where.isFree = false;
+      andConditions.push({ isFree: false });
     }
 
-    if (query) {
-      where.OR = [
-        { title: { contains: query } },
-        { description: { contains: query } },
-        { tags: { contains: query } },
-      ];
+    if (query && query.trim()) {
+      const q = query.trim();
+      andConditions.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+          { tags: { contains: q, mode: 'insensitive' } },
+        ],
+      });
     }
 
     if (minPrice || maxPrice) {
-      where.price = {};
-      if (minPrice) where.price.gte = parseFloat(minPrice);
-      if (maxPrice) where.price.lte = parseFloat(maxPrice);
+      const priceCond: any = {};
+      if (minPrice && !isNaN(parseFloat(minPrice))) priceCond.gte = parseFloat(minPrice);
+      if (maxPrice && !isNaN(parseFloat(maxPrice))) priceCond.lte = parseFloat(maxPrice);
+      andConditions.push({ price: priceCond });
     }
 
-    if (minRating) {
-      where.ratingAvg = { gte: parseFloat(minRating) };
+    if (minRating && !isNaN(parseFloat(minRating))) {
+      andConditions.push({ ratingAvg: { gte: parseFloat(minRating) } });
     }
+
+    const where = { AND: andConditions };
 
     let orderBy: any = { createdAt: 'desc' };
     if (sortBy === 'price_asc') orderBy = { price: 'asc' };
@@ -121,8 +130,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A product ZIP file is required for the listing' }, { status: 400 });
     }
 
+    if (zipFile) {
+      const zipName = zipFile.name.toLowerCase();
+      const validZipExts = ['.zip', '.rar', '.7z'];
+      if (!validZipExts.some((ext) => zipName.endsWith(ext))) {
+        return NextResponse.json({ error: `Invalid product file "${zipFile.name}". Only .zip, .rar, or .7z archives are allowed.` }, { status: 400 });
+      }
+    }
+
     if (previewFiles.length < 1 || previewFiles.length > 4) {
       return NextResponse.json({ error: 'Minimum 1 and maximum 4 preview images are required.' }, { status: 400 });
+    }
+
+    const validImgExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    const invalidImg = previewFiles.find((f) => !validImgExts.some((ext) => f.name.toLowerCase().endsWith(ext)));
+    if (invalidImg) {
+      return NextResponse.json({ error: `Invalid preview image "${invalidImg.name}". Only JPG, PNG, and WEBP preview images are allowed.` }, { status: 400 });
     }
 
     let zipDriveFileId = formData.get('existingZipDriveId') as string || '';
