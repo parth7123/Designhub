@@ -88,7 +88,7 @@ export const Navbar: React.FC = () => {
               My Purchases
             </Link>
           )}
-          {currentUser && currentUser.role === 'SELLER' && (
+          {(currentUser?.role === 'SELLER' || currentUser?.role === 'ADMIN') && (
             <Link href="/seller" className="hover:text-[#8b263e] transition-colors py-2 flex items-center gap-1.5">
               <Store className="h-3.5 w-3.5 text-emerald-800" />
               Seller Studio

@@ -35,6 +35,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ listing, isOpen, o
         throw new Error(data.error || 'Failed to initiate checkout');
       }
 
+      // If free or simulated fallback order, verify and complete immediately
+      if (data.isFree || data.razorpayOrderId?.startsWith('order_sim_') || data.razorpayOrderId?.startsWith('free_order_')) {
+        await verifyAndCompletePayment(
+          data.razorpayOrderId,
+          `pay_sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          'simulated_valid_signature'
+        );
+        return;
+      }
+
       // 2. Dynamically load official Razorpay checkout script
       const loadScript = (): Promise<boolean> => {
         return new Promise((resolve) => {
