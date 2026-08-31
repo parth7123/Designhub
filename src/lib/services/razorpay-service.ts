@@ -96,8 +96,8 @@ export async function createRazorpayOrder({
     },
   };
 
-  // If seller has a linked Razorpay Route account, attempt transfers split
-  if (listing.seller.razorpayAccountId && !listing.seller.razorpayAccountId.startsWith('acc_rzp_route_')) {
+  // If seller has a linked Razorpay Route account, add automated split transfer
+  if (listing.seller.razorpayAccountId) {
     options.transfers = [
       {
         account: listing.seller.razorpayAccountId,
